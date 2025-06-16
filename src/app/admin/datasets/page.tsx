@@ -63,10 +63,12 @@ export default function AdminDatasetsPage() {
 
   const checkAdminStatus = useCallback(async () => {
     try {
+      if (!user?.id) return;
+
       const { data, error } = await supabase
         .from('users')
         .select('is_admin')
-        .eq('id', user?.id)
+        .eq('id', user.id)
         .single();
       
       if (error) throw error;

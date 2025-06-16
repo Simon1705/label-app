@@ -1,21 +1,18 @@
 import LabelingClient from '@/components/LabelingClient';
 import { Suspense } from 'react';
 
-interface PageProps {
-  params: { id: string };
-  searchParams: { [key: string]: string | string[] | undefined };
-}
-
-export async function generateMetadata({ params }: PageProps) {
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   return {
-    title: `Labeling Session ${params.id}`
+    title: `Labeling Session ${id}`
   };
 }
 
-export default async function LabelingPage({ params }: PageProps) {
+export default async function Page({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   return (
     <Suspense fallback={<div>Loading...</div>}>
-      <LabelingClient id={params.id} />
+      <LabelingClient id={id} />
     </Suspense>
   );
 }
