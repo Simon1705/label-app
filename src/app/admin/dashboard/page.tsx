@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -21,6 +21,33 @@ export default function AdminDashboard() {
   const [loadingData, setLoadingData] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   
+  const fetchData = useCallback(async () => {
+    try {
+      setLoadingData(true);
+      
+      // Fetch all users
+      const { data: usersData, error: usersError } = await supabase
+        .from('users')
+        .select('*');
+      
+      if (usersError) throw usersError;
+      
+      // Fetch all datasets
+      const { data: datasetsData, error: datasetsError } = await supabase
+        .from('datasets')
+        .select('*');
+      
+      if (datasetsError) throw datasetsError;
+      
+      setUsers(usersData || []);
+      setDatasets(datasetsData || []);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    } finally {
+      setLoadingData(false);
+    }
+  }, []);
+  
   useEffect(() => {
     // Redirect if not admin
     if (!loading && (!user || !isAdmin)) {
@@ -32,36 +59,7 @@ export default function AdminDashboard() {
     if (user && isAdmin) {
       fetchData();
     }
-  }, [user, isAdmin]);
-  
-  const fetchData = async () => {
-    try {
-      setLoadingData(true);
-      
-      // Fetch users
-      const { data: usersData, error: usersError } = await supabase
-        .from('users')
-        .select('*')
-        .order('created_at', { ascending: false });
-      
-      if (usersError) throw usersError;
-      
-      // Fetch datasets
-      const { data: datasetsData, error: datasetsError } = await supabase
-        .from('datasets')
-        .select('*')
-        .order('created_at', { ascending: false });
-      
-      if (datasetsError) throw datasetsError;
-      
-      setUsers(usersData || []);
-      setDatasets(datasetsData || []);
-    } catch (error) {
-      console.error('Error fetching admin data:', error);
-    } finally {
-      setLoadingData(false);
-    }
-  };
+  }, [user, isAdmin, fetchData]);
   
   const handleDeleteDataset = async (datasetId: string) => {
     try {

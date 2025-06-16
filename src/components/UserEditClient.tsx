@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -29,13 +29,7 @@ export default function UserEditClient({ id }: UserEditClientProps) {
     username: '',
   });
   
-  useEffect(() => {
-    if (isAdmin) {
-      fetchUser();
-    }
-  }, [isAdmin, userId]);
-  
-  const fetchUser = async () => {
+  const fetchUser = useCallback(async () => {
     try {
       setIsLoading(true);
       
@@ -64,7 +58,13 @@ export default function UserEditClient({ id }: UserEditClientProps) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [userId]);
+  
+  useEffect(() => {
+    if (isAdmin) {
+      fetchUser();
+    }
+  }, [isAdmin, userId, fetchUser]);
   
   const validateForm = () => {
     const formErrors = {

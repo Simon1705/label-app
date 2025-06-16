@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -48,15 +48,8 @@ export default function LabelingClient({ id }: LabelingClientProps) {
   const [debugMode, setDebugMode] = useState(false);
   const [entryOriginalOrder, setEntryOriginalOrder] = useState<Record<string, number>>({});
   
-  // Load submitted labels from database when component mounts
-  useEffect(() => {
-    if (user && id) {
-      fetchDatasetAndEntries();
-    }
-  }, [user, id]);
-
   // Completely rewritten fetchDatasetAndEntries function
-  const fetchDatasetAndEntries = async () => {
+  const fetchDatasetAndEntries = useCallback(async () => {
     try {
       console.log('⏳ Fetching dataset and entries...');
       setLoading(true);
@@ -163,7 +156,13 @@ export default function LabelingClient({ id }: LabelingClientProps) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id, user?.id, entriesPerPage]);
+
+  useEffect(() => {
+    if (user && id) {
+      fetchDatasetAndEntries();
+    }
+  }, [user, id, fetchDatasetAndEntries]);
   
   // Fix the loadPageEntries function to handle large page sizes correctly
   const loadPageEntries = async (pageIndex: number, pageSize: number) => {
@@ -308,7 +307,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       }
       
       // Sort entries based on original order if available
-      let sortedEntries = [...entriesData];
+      const sortedEntries = [...entriesData];
       if (Object.keys(entryOriginalOrder).length > 0) {
         sortedEntries.sort((a, b) => {
           const orderA = entryOriginalOrder[a.id] ?? Number.MAX_SAFE_INTEGER;
@@ -420,13 +419,6 @@ export default function LabelingClient({ id }: LabelingClientProps) {
     }
   };
   
-  // Update useEffect to use the new page loading approach
-  useEffect(() => {
-    if (user && id) {
-      fetchDatasetAndEntries();
-    }
-  }, [user, id, entriesPerPage]);
-
   // Update handlePageSelect to save the last page
   function handlePageSelect(pageNum: number) {
     if (pageNum === -1) return; // Skip separators
