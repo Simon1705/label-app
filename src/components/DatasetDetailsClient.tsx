@@ -245,7 +245,7 @@ export default function DatasetDetailsClient({ id }: DatasetDetailsClientProps) 
         };
         
         // Check for label agreement
-        let labelValues = new Set<string>();
+        const labelValues = new Set<string>();
         
         // Add labels from each user
         entryLabels.forEach(label => {

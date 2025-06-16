@@ -168,7 +168,7 @@ export default function LabelingPage() {
     } finally {
       setLoading(false);
     }
-  }, [user?.id, supabase]);
+  }, [user?.id]);
 
   useEffect(() => {
     if (user) {
