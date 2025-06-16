@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -15,11 +15,13 @@ import { motion } from 'framer-motion';
 // Local Badge component implementation to avoid import case issues
 type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline' | 'success';
 
-interface BadgeProps extends React.HTMLAttributes<HTMLDivElement> {
+interface BadgeProps {
   variant?: BadgeVariant;
+  className?: string;
+  children: React.ReactNode;
 }
 
-function Badge({ className, variant = 'default', ...props }: BadgeProps) {
+function Badge({ className, variant = 'default', children }: BadgeProps) {
   const variantClasses = {
     default: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 border-transparent",
     secondary: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-100 border-transparent",
@@ -35,20 +37,21 @@ function Badge({ className, variant = 'default', ...props }: BadgeProps) {
         variantClasses[variant],
         className
       )} 
-      {...props} 
-    />
+    >
+      {children}
+    </div>
   );
 }
 
 // Local Skeleton component
-function Skeleton({
-  className,
-  ...props
-}: React.HTMLAttributes<HTMLDivElement>) {
+interface SkeletonProps {
+  className?: string;
+}
+
+function Skeleton({ className }: SkeletonProps) {
   return (
     <div
       className={cn("animate-pulse rounded-md bg-gray-200 dark:bg-gray-700", className)}
-      {...props}
     />
   );
 }
@@ -110,20 +113,7 @@ export default function Dashboard() {
   const [loadingData, setLoadingData] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
 
-  useEffect(() => {
-    // Redirect if not logged in or is admin
-    if (!loading && (!user || isAdmin)) {
-      router.push('/');
-    }
-  }, [user, loading, isAdmin, router]);
-
-  useEffect(() => {
-    if (user) {
-      fetchData();
-    }
-  }, [user]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoadingData(true);
       
@@ -175,19 +165,32 @@ export default function Dashboard() {
     } finally {
       setLoadingData(false);
     }
-  };
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (user) {
+      fetchData();
+    }
+  }, [user, fetchData]);
+
+  useEffect(() => {
+    // Redirect if not logged in or is admin
+    if (!loading && (!user || isAdmin)) {
+      router.push('/');
+    }
+  }, [user, loading, isAdmin, router]);
+
+  const getProgressForDataset = useCallback((datasetId: string): number => {
+    const datasetProgress = progress.find((p: LabelProgress) => p.dataset_id === datasetId);
+    if (!datasetProgress) return 0;
+    return calculateProgress(datasetProgress.completed, datasetProgress.total);
+  }, [progress]);
+
+  const totalLabelsContributed = progress.reduce((total: number, current: LabelProgress) => total + current.completed, 0);
 
   if (loading || !user) {
     return <LoadingScreen />;
   }
-
-  const getProgressForDataset = (datasetId: string) => {
-    const datasetProgress = progress.find(p => p.dataset_id === datasetId);
-    if (!datasetProgress) return 0;
-    return calculateProgress(datasetProgress.completed, datasetProgress.total);
-  };
-
-  const totalLabelsContributed = progress.reduce((total, current) => total + current.completed, 0);
 
   return (
     <div className="pt-16 fixed inset-0 overflow-y-auto bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">

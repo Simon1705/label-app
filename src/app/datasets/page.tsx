@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -15,11 +15,13 @@ import { motion } from 'framer-motion';
 // Local Badge component
 type BadgeVariant = 'default' | 'secondary' | 'outline';
 
-interface BadgeProps extends React.HTMLAttributes<HTMLDivElement> {
+interface BadgeProps {
   variant?: BadgeVariant;
+  className?: string;
+  children: React.ReactNode;
 }
 
-function Badge({ className, variant = 'default', ...props }: BadgeProps) {
+function Badge({ className, variant = 'default', children }: BadgeProps) {
   const variantClasses = {
     default: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 border-transparent",
     secondary: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-100 border-transparent",
@@ -32,21 +34,22 @@ function Badge({ className, variant = 'default', ...props }: BadgeProps) {
         "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold", 
         variantClasses[variant],
         className
-      )} 
-      {...props} 
-    />
+      )}
+    >
+      {children}
+    </div>
   );
 }
 
 // Local Skeleton component
-function Skeleton({
-  className,
-  ...props
-}: React.HTMLAttributes<HTMLDivElement>) {
+interface SkeletonProps {
+  className?: string;
+}
+
+function Skeleton({ className }: SkeletonProps) {
   return (
     <div
       className={cn("animate-pulse rounded-md bg-gray-200 dark:bg-gray-700", className)}
-      {...props}
     />
   );
 }
@@ -108,14 +111,7 @@ export default function DatasetsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    if (user) {
-      fetchDatasets();
-      checkAdminStatus();
-    }
-  }, [user]);
-
-  const checkAdminStatus = async () => {
+  const checkAdminStatus = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('users')
@@ -130,9 +126,9 @@ export default function DatasetsPage() {
       console.error('Error checking admin status:', error);
       setIsAdmin(false);
     }
-  };
+  }, [user?.id]);
 
-  const fetchDatasets = async () => {
+  const fetchDatasets = useCallback(async () => {
     try {
       setLoading(true);
       
@@ -151,7 +147,14 @@ export default function DatasetsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (user) {
+      fetchDatasets();
+      checkAdminStatus();
+    }
+  }, [user, fetchDatasets, checkAdminStatus]);
 
   const refreshData = async () => {
     setRefreshing(true);
@@ -159,7 +162,7 @@ export default function DatasetsPage() {
     setTimeout(() => setRefreshing(false), 800);
   };
 
-  const filteredDatasets = datasets.filter(dataset => 
+  const filteredDatasets = datasets.filter((dataset: Dataset) => 
     dataset.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (dataset.description && dataset.description.toLowerCase().includes(searchTerm.toLowerCase()))
   );

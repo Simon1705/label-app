@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -24,13 +24,44 @@ export default function AdminDatasetsPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (user) {
-      checkAdminStatus();
+  const fetchAllDatasets = useCallback(async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch all datasets
+      const { data, error } = await supabase
+        .from('datasets')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      
+      // Fetch all users to get owner information
+      const { data: users, error: usersError } = await supabase
+        .from('users')
+        .select('*');
+      
+      if (usersError) throw usersError;
+      
+      // Map owners to datasets
+      const datasetsWithOwners = data?.map((dataset: Dataset) => {
+        const owner = users?.find((u: User) => u.id === dataset.owner_id);
+        return {
+          ...dataset,
+          owner
+        };
+      }) || [];
+      
+      setDatasets(datasetsWithOwners);
+    } catch (error) {
+      console.error('Error fetching datasets:', error);
+      toast.error('Failed to load datasets');
+    } finally {
+      setLoading(false);
     }
-  }, [user]);
+  }, []);
 
-  const checkAdminStatus = async () => {
+  const checkAdminStatus = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('users')
@@ -55,44 +86,13 @@ export default function AdminDatasetsPage() {
       toast.error('Failed to verify admin status');
       router.push('/datasets');
     }
-  };
+  }, [user?.id, router, fetchAllDatasets]);
 
-  const fetchAllDatasets = async () => {
-    try {
-      setLoading(true);
-      
-      // Fetch all datasets
-      const { data, error } = await supabase
-        .from('datasets')
-        .select('*')
-        .order('created_at', { ascending: false });
-      
-      if (error) throw error;
-      
-      // Fetch all users to get owner information
-      const { data: users, error: usersError } = await supabase
-        .from('users')
-        .select('*');
-      
-      if (usersError) throw usersError;
-      
-      // Map owners to datasets
-      const datasetsWithOwners = data?.map(dataset => {
-        const owner = users?.find(u => u.id === dataset.owner_id);
-        return {
-          ...dataset,
-          owner
-        };
-      }) || [];
-      
-      setDatasets(datasetsWithOwners);
-    } catch (error) {
-      console.error('Error fetching datasets:', error);
-      toast.error('Failed to load datasets');
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    if (user) {
+      checkAdminStatus();
     }
-  };
+  }, [user, checkAdminStatus]);
 
   const handleDeleteDataset = async (datasetId: string) => {
     try {
@@ -153,7 +153,7 @@ export default function AdminDatasetsPage() {
       toast.success('Dataset deleted successfully');
       
       // Update the list
-      setDatasets(prev => prev.filter(d => d.id !== datasetId));
+      setDatasets((prev: DatasetWithOwner[]) => prev.filter((d: DatasetWithOwner) => d.id !== datasetId));
     } catch (error) {
       console.error('Error deleting dataset:', error);
       toast.error('Failed to delete dataset');
