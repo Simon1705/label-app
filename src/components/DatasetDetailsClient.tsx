@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -47,14 +47,7 @@ export default function DatasetDetailsClient({ id }: DatasetDetailsClientProps) 
   const [showExportOptions, setShowExportOptions] = useState(false);
   const [exportFormat, setExportFormat] = useState<'text' | 'numeric'>('text');
   
-  useEffect(() => {
-    if (user) {
-      fetchDatasetDetails();
-      checkAdminStatus();
-    }
-  }, [user, id]);
-  
-  const checkAdminStatus = async () => {
+  const checkAdminStatus = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('users')
@@ -69,9 +62,9 @@ export default function DatasetDetailsClient({ id }: DatasetDetailsClientProps) 
       console.error('Error checking admin status:', error);
       setIsAdmin(false);
     }
-  };
+  }, [user?.id]);
   
-  const fetchDatasetDetails = async () => {
+  const fetchDatasetDetails = useCallback(async () => {
     try {
       setLoading(true);
       
@@ -122,7 +115,14 @@ export default function DatasetDetailsClient({ id }: DatasetDetailsClientProps) 
     } finally {
       setLoading(false);
     }
-  };
+  }, [id, user?.id, isAdmin, router]);
+
+  useEffect(() => {
+    if (user) {
+      fetchDatasetDetails();
+      checkAdminStatus();
+    }
+  }, [user, id, fetchDatasetDetails, checkAdminStatus]);
   
   const copyInviteCode = () => {
     if (!dataset) return;

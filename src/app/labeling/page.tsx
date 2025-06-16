@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -121,13 +121,7 @@ export default function LabelingPage() {
   const [joining, setJoining] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    if (user) {
-      fetchLabelingTasks();
-    }
-  }, [user]);
-
-  const fetchLabelingTasks = async () => {
+  const fetchLabelingTasks = useCallback(async () => {
     try {
       setLoading(true);
       
@@ -174,7 +168,13 @@ export default function LabelingPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.id, supabase]);
+
+  useEffect(() => {
+    if (user) {
+      fetchLabelingTasks();
+    }
+  }, [user, fetchLabelingTasks]);
 
   const refreshData = async () => {
     setRefreshing(true);
