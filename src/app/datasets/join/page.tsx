@@ -58,7 +58,7 @@ export default function JoinLabeling() {
       
       if (existingProgress) {
         // User has already joined, redirect to labeling
-        router.push(`/labeling/${dataset.id}`);
+        router.push(`/labeling`);
         return;
       }
       
@@ -75,7 +75,7 @@ export default function JoinLabeling() {
       if (createError) throw createError;
       
       toast.success('You have joined the labeling task!');
-      router.push(`/labeling/${dataset.id}`);
+      router.push(`/labeling`);
     } catch (error) {
       console.error('Join error:', error);
       toast.error('Failed to join dataset');
@@ -86,47 +86,60 @@ export default function JoinLabeling() {
   };
   
   return (
-    <div className="max-w-md mx-auto">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Join Labeling Task</h1>
-      
-      <Card>
-        <CardHeader>
-          <CardTitle>Enter Invite Code</CardTitle>
-          <CardDescription>
-            Input the invite code you received to start labeling a dataset
+    <div className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden p-4">
+      {/* Decorative Blobs - now fixed and full screen */}
+      <div className="fixed inset-0 -z-10">
+        <div className="absolute -top-32 -left-32 w-80 h-80 bg-purple-300 dark:bg-purple-900 rounded-full mix-blend-multiply filter blur-2xl opacity-40 animate-blob" />
+        <div className="absolute -bottom-32 -right-32 w-80 h-80 bg-indigo-300 dark:bg-indigo-900 rounded-full mix-blend-multiply filter blur-2xl opacity-40 animate-blob animation-delay-2000" />
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-pink-300 dark:bg-pink-900 rounded-full mix-blend-multiply filter blur-2xl opacity-30 animate-blob animation-delay-4000" />
+        <div className="absolute inset-0 bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900" />
+      </div>
+
+      <Card className="w-full max-w-md z-10 shadow-2xl backdrop-blur-md bg-white/80 dark:bg-gray-900/80 border border-white/30 dark:border-gray-700/60">
+        <CardHeader className="flex flex-col items-center">
+          <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-lg mb-4">
+            <FiTag className="text-white text-3xl" />
+          </div>
+          <CardTitle className="text-2xl text-center">Join a Labeling Task</CardTitle>
+          <CardDescription className="text-center">
+            Enter the invite code you received to start labeling a new dataset.
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleJoin}>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="relative">
+          <CardContent className="space-y-4">
+            <div>
+              <label htmlFor="invite-code" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Invite Code
+              </label>
+              <div className="relative mt-1">
                 <Input
-                  label="Invite Code"
+                  id="invite-code"
                   placeholder="Enter the invite code"
                   value={inviteCode}
                   onChange={(e) => setInviteCode(e.target.value)}
-                  error={error}
                   disabled={isJoining}
+                  className={`pl-10 ${error ? 'border-red-500 focus:ring-red-500' : ''}`}
+                  autoFocus
                 />
                 <FiTag 
-                  className="absolute right-3 top-9 text-gray-400" 
-                  size={16}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" 
+                  size={18}
                 />
               </div>
-              
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                The invite code is a unique identifier shared by the dataset owner.
-              </p>
+              {error && <p className="mt-1 text-sm text-red-500 font-medium">{error}</p>}
             </div>
+            <p className="text-sm text-gray-500 dark:text-gray-400 !mt-2 text-center">
+              The invite code is a unique key provided by the dataset owner to grant access for labeling.
+            </p>
           </CardContent>
           <CardFooter>
             <Button
               type="submit"
-              fullWidth={true}
               isLoading={isJoining}
               disabled={!inviteCode.trim() || isJoining}
+              className="w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 text-white shadow-lg font-semibold text-base py-2"
             >
-              Join Labeling Task
+              {isJoining ? 'Joining...' : 'Join Labeling Task'}
             </Button>
           </CardFooter>
         </form>

@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { Dataset, LabelProgress } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { FiUpload, FiTag, FiGrid, FiChevronRight, FiActivity, FiBarChart2, FiBox, FiUser, FiLoader } from 'react-icons/fi';
+import { FiUpload, FiTag, FiGrid, FiChevronRight, FiActivity, FiBarChart2, FiBox, FiUser, FiLoader, FiPlusCircle } from 'react-icons/fi';
 import Link from 'next/link';
 import { calculateProgress, cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
@@ -260,189 +260,108 @@ export default function Dashboard() {
           </div>
           
           {activeTab === 'overview' && (
-            <div className="space-y-8 pb-20">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <motion.div 
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ duration: 0.3, delay: 0.1 }}
-                  whileHover={{ y: -5 }}
-                >
-                  <Card className="backdrop-blur-sm bg-white/80 dark:bg-gray-800/80 border border-white/20 dark:border-gray-700/50 shadow-lg hover:shadow-xl transition-all overflow-hidden">
-                    <div className="absolute top-0 left-0 h-1 w-full bg-gradient-to-r from-blue-500 to-indigo-500"></div>
-                    <CardHeader>
-                      <CardTitle className="flex items-center text-gray-900 dark:text-white">
-                        <FiBox className="mr-2 text-blue-500" /> My Datasets
-                      </CardTitle>
-                      <CardDescription className="text-gray-600 dark:text-gray-300">Datasets you have uploaded</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                        {myDatasets.length}
-                      </div>
-                      <Link href="/datasets">
-                        <Button variant="outline" className="mt-4 w-full group border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-500 transition-all">
-                          <FiGrid className="mr-2" /> View All
-                          <FiChevronRight className="ml-auto group-hover:translate-x-1 transition-transform" />
-                        </Button>
-                      </Link>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-                
-                <motion.div 
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ duration: 0.3, delay: 0.2 }}
-                  whileHover={{ y: -5 }}
-                >
-                  <Card className="backdrop-blur-sm bg-white/80 dark:bg-gray-800/80 border border-white/20 dark:border-gray-700/50 shadow-lg hover:shadow-xl transition-all overflow-hidden">
-                    <div className="absolute top-0 left-0 h-1 w-full bg-gradient-to-r from-green-500 to-emerald-500"></div>
-                    <CardHeader>
-                      <CardTitle className="flex items-center text-gray-900 dark:text-white">
-                        <FiTag className="mr-2 text-green-500" /> Invited Datasets
-                      </CardTitle>
-                      <CardDescription className="text-gray-600 dark:text-gray-300">Datasets you've been invited to label</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-4xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
-                        {loadingData ? (
-                          <Skeleton className="h-10 w-10 bg-gray-200 dark:bg-gray-700" />
-                        ) : (
-                          invitedDatasets.length
-                        )}
-                      </div>
-                      <Link href="/labeling">
-                        <Button 
-                          variant="outline" 
-                          className="mt-4 w-full group border-gray-200 dark:border-gray-700 hover:border-green-500 dark:hover:border-green-500 transition-all"
-                          disabled={loadingData}
-                        >
-                          <FiTag className="mr-2" /> 
-                          {invitedDatasets.length > 0 ? 'Continue Labeling' : 'Join Datasets'}
-                          <FiChevronRight className="ml-auto group-hover:translate-x-1 transition-transform" />
-                        </Button>
-                      </Link>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-                
-                <motion.div 
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ duration: 0.3, delay: 0.3 }}
-                  whileHover={{ y: -5 }}
-                >
-                  <Card className="backdrop-blur-sm bg-white/80 dark:bg-gray-800/80 border border-white/20 dark:border-gray-700/50 shadow-lg hover:shadow-xl transition-all overflow-hidden">
-                    <div className="absolute top-0 left-0 h-1 w-full bg-gradient-to-r from-purple-500 to-pink-500"></div>
-                    <CardHeader>
-                      <CardTitle className="flex items-center text-gray-900 dark:text-white">
-                        <FiActivity className="mr-2 text-purple-500" /> Labeling Progress
-                      </CardTitle>
-                      <CardDescription className="text-gray-600 dark:text-gray-300">Your overall labeling activity</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-                        {totalLabelsContributed}
-                      </div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                        Labels contributed
-                      </p>
-                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 mt-4 overflow-hidden">
-                        <motion.div 
-                          initial={{ width: 0 }}
-                          animate={{ width: `${Math.min(100, (totalLabelsContributed / Math.max(1, progress.reduce((total, current) => total + current.total, 0))) * 100)}%` }}
-                          transition={{ duration: 1, delay: 0.5 }}
-                          className="bg-gradient-to-r from-purple-500 to-pink-500 h-2.5 rounded-full" 
-                        />
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              </div>
-
-              {invitedDatasets.length > 0 && (
-                <motion.div 
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5, delay: 0.4 }}
-                >
-                  <div className="backdrop-blur-sm bg-white/80 dark:bg-gray-800/80 border border-white/20 dark:border-gray-700/50 shadow-lg rounded-xl p-6">
-                    <div className="flex justify-between items-center mb-6">
-                      <h2 className="text-xl font-semibold bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
-                        Recent Labeling Tasks
-                      </h2>
-                      <Link href="/labeling">
-                        <Button variant="outline" size="sm" className="border-gray-200 dark:border-gray-700 hover:border-indigo-500 dark:hover:border-indigo-500 transition-all">
-                          View All
-                        </Button>
-                      </Link>
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.3 }}
+              className="w-full space-y-10"
+            >
+              {/* Render hanya tombol jika user belum punya dataset sama sekali */}
+              {myDatasets.length === 0 && invitedDatasets.filter(dataset => dataset.owner_id !== user.id).length === 0 ? (
+                <div className="flex flex-col items-center justify-center mt-16">
+                  <div className="backdrop-blur-md bg-white/80 dark:bg-gray-900/80 border border-white/30 dark:border-gray-700/60 shadow-2xl rounded-2xl p-8 flex flex-col items-center max-w-md w-full">
+                    <div className="h-20 w-20 rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-lg mb-6">
+                      <FiTag className="text-white text-4xl" />
                     </div>
-                    <div className="grid grid-cols-1 gap-6">
-                      {invitedDatasets.slice(0, 3).map((dataset, index) => (
-                        <motion.div 
-                          key={dataset.id}
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ duration: 0.3, delay: 0.1 * index }}
-                          whileHover={{ scale: 1.02 }}
-                          className="transform transition-all"
-                        >
-                          <Card className="backdrop-blur-sm bg-white/60 dark:bg-gray-800/60 border border-white/20 dark:border-gray-700/50 overflow-hidden hover:shadow-lg transition-all rounded-xl" 
-                            style={{ 
-                              borderLeftWidth: '4px',
-                              borderLeftColor: getProgressForDataset(dataset.id) >= 80 
-                                ? '#10b981' 
-                                : getProgressForDataset(dataset.id) >= 40 
-                                  ? '#6366f1' 
-                                  : '#ef4444'
-                            }}
-                          >
-                            <CardContent className="p-6">
-                              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                                <div>
-                                  <h3 className="text-lg font-medium text-gray-900 dark:text-white">{dataset.name}</h3>
-                                  <div className="flex items-center gap-2 mt-1">
-                                    <Badge variant="secondary">{dataset.total_entries} entries</Badge>
-                                    <Badge 
-                                      variant={getProgressForDataset(dataset.id) >= 80 ? "success" : 
-                                              getProgressForDataset(dataset.id) >= 40 ? "default" : "destructive"}
-                                    >
-                                      {getProgressForDataset(dataset.id)}% complete
-                                    </Badge>
-                                  </div>
-                                </div>
-                                <div className="flex flex-col items-end w-full md:w-auto">
-                                  <div className="w-full md:w-48 bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 mb-2 overflow-hidden">
-                                    <motion.div 
-                                      initial={{ width: 0 }}
-                                      animate={{ width: `${getProgressForDataset(dataset.id)}%` }}
-                                      transition={{ duration: 1, delay: 0.5 }}
-                                      className={`h-2.5 rounded-full ${
-                                        getProgressForDataset(dataset.id) >= 80 
-                                          ? 'bg-gradient-to-r from-green-400 to-green-600' 
-                                          : getProgressForDataset(dataset.id) >= 40 
-                                            ? 'bg-gradient-to-r from-blue-400 to-indigo-600' 
-                                            : 'bg-gradient-to-r from-red-400 to-red-600'
-                                      }`}
-                                    />
-                                  </div>
-                                  <Link href={`/labeling/${dataset.id}`}>
-                                    <Button className="mt-2 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 text-white shadow-md hover:shadow-lg transition-all">
-                                      Continue Labeling <FiChevronRight className="ml-2" />
-                                    </Button>
-                                  </Link>
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        </motion.div>
-                      ))}
+                    <p className="mb-4 text-xl text-gray-800 dark:text-white font-semibold text-center">You don't have any datasets yet</p>
+                    <p className="mb-6 text-base text-gray-600 dark:text-gray-300 text-center">Get started by uploading your own dataset or joining an existing one!</p>
+                    <div className="flex flex-col sm:flex-row gap-4 w-full justify-center">
+                      <Link href="/datasets/upload" className="w-full sm:w-auto flex-1 flex justify-center">
+                        <Button className="min-w-[180px] px-6 py-4 text-base sm:text-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-indigo-700 hover:to-blue-700 transition-all duration-200 text-white shadow-xl font-bold rounded-full transform hover:scale-105 focus:ring-4 focus:ring-blue-300 focus:outline-none w-full flex items-center justify-center">
+                          <FiUpload className="mr-2 text-xl sm:text-2xl" /> <span className="truncate">Upload Dataset</span>
+                        </Button>
+                      </Link>
+                      <Link href="/datasets/join" className="w-full sm:w-auto flex-1 flex justify-center">
+                        <Button className="min-w-[180px] px-6 py-4 text-base sm:text-lg bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-pink-600 hover:to-indigo-600 transition-all duration-200 text-white shadow-xl font-bold rounded-full transform hover:scale-105 focus:ring-4 focus:ring-pink-300 focus:outline-none w-full flex items-center justify-center">
+                          <FiPlusCircle className="mr-2 text-xl sm:text-2xl" /> <span className="truncate">Join Dataset</span>
+                        </Button>
+                      </Link>
                     </div>
                   </div>
-                </motion.div>
+                </div>
+              ) : (
+                <>
+                  {/* Section: My Datasets */}
+                  <div>
+                    <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">My Datasets</h2>
+                    {myDatasets.length === 0 ? (
+                      <div className="text-gray-500 dark:text-gray-400 italic mb-6">You have not uploaded any datasets yet.</div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {myDatasets.map((dataset) => (
+                          <Card key={dataset.id} className="backdrop-blur-sm bg-white/80 dark:bg-gray-800/80 border border-white/20 dark:border-gray-700/50 shadow-lg hover:shadow-xl transition-all overflow-hidden">
+                            <div className="absolute top-0 left-0 h-1 w-full bg-gradient-to-r from-blue-500 to-indigo-500"></div>
+                            <CardHeader>
+                              <div className="flex items-center gap-2 mb-1">
+                                <CardTitle className="text-gray-900 dark:text-white font-bold">{dataset.name}</CardTitle>
+                                <Badge variant="success">Owner</Badge>
+                              </div>
+                              <CardDescription className="text-gray-600 dark:text-gray-300">{dataset.description || 'No description'}</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="flex items-center gap-2 mb-2">
+                                <Badge variant="secondary">{dataset.total_entries} entries</Badge>
+                                <Badge variant="default">{getProgressForDataset(dataset.id)}% complete</Badge>
+                              </div>
+                              <Link href={`/datasets/${dataset.id}`}>
+                                <Button className="w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 text-white shadow-md hover:shadow-lg transition-all mt-2">
+                                  View Dataset <FiChevronRight className="ml-2" />
+                                </Button>
+                              </Link>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {/* Section: Invited Datasets */}
+                  <div>
+                    <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Invited Datasets</h2>
+                    {invitedDatasets.filter(dataset => dataset.owner_id !== user.id).length === 0 ? (
+                      <div className="text-gray-500 dark:text-gray-400 italic mb-6">You have not joined any datasets yet.</div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {invitedDatasets
+                          .filter(dataset => dataset.owner_id !== user.id)
+                          .map((dataset) => (
+                            <Card key={dataset.id} className="backdrop-blur-sm bg-white/80 dark:bg-gray-800/80 border border-white/20 dark:border-gray-700/50 shadow-lg hover:shadow-xl transition-all overflow-hidden">
+                              <div className="absolute top-0 left-0 h-1 w-full bg-gradient-to-r from-green-500 to-emerald-500"></div>
+                              <CardHeader>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <CardTitle className="text-gray-900 dark:text-white font-bold">{dataset.name}</CardTitle>
+                                  <Badge variant="secondary">Joined</Badge>
+                                </div>
+                                <CardDescription className="text-gray-600 dark:text-gray-300">{dataset.description || 'No description'}</CardDescription>
+                              </CardHeader>
+                              <CardContent>
+                                <div className="flex items-center gap-2 mb-2">
+                                  <Badge variant="secondary">{dataset.total_entries} entries</Badge>
+                                  <Badge variant={getProgressForDataset(dataset.id) >= 80 ? "success" : getProgressForDataset(dataset.id) >= 40 ? "default" : "destructive"}>{getProgressForDataset(dataset.id)}% complete</Badge>
+                                </div>
+                                <Link href={`/labeling/${dataset.id}`}>
+                                  <Button className="w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 text-white shadow-md hover:shadow-lg transition-all mt-2">
+                                    Continue Labeling <FiChevronRight className="ml-2" />
+                                  </Button>
+                                </Link>
+                              </CardContent>
+                            </Card>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                </>
               )}
-            </div>
+            </motion.div>
           )}
         </motion.div>
       </motion.div>

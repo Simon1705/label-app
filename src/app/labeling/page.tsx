@@ -116,9 +116,7 @@ export default function LabelingPage() {
   const { user } = useAuth();
   const router = useRouter();
   const [tasks, setTasks] = useState<LabelingTask[]>([]);
-  const [inviteCode, setInviteCode] = useState('');
   const [loading, setLoading] = useState(true);
-  const [joining, setJoining] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchLabelingTasks = useCallback(async () => {
@@ -182,74 +180,6 @@ export default function LabelingPage() {
     setTimeout(() => setRefreshing(false), 800);
   };
 
-  const handleJoinDataset = async () => {
-    if (!inviteCode.trim()) {
-      toast.error('Please enter an invite code');
-      return;
-    }
-    
-    try {
-      setJoining(true);
-      
-      // Find dataset with this invite code
-      const { data: dataset, error: datasetError } = await supabase
-        .from('datasets')
-        .select('*')
-        .eq('invite_code', inviteCode)
-        .single();
-      
-      if (datasetError) {
-        toast.error('Invalid invite code');
-        return;
-      }
-      
-      // Check if already joined
-      const { data: existingProgress, error: progressCheckError } = await supabase
-        .from('label_progress')
-        .select('id')
-        .eq('dataset_id', dataset.id)
-        .eq('user_id', user?.id);
-      
-      if (progressCheckError) throw progressCheckError;
-      
-      if (existingProgress && existingProgress.length > 0) {
-        // Already joined, just refresh the task list and notify the user
-        toast.success(`You've already joined "${dataset.name}"`);
-        await fetchLabelingTasks();
-        setInviteCode('');
-        return;
-      }
-      
-      // Create new progress record
-      const { error: createError } = await supabase
-        .from('label_progress')
-        .insert({
-          dataset_id: dataset.id,
-          user_id: user?.id,
-          completed: 0,
-          total: dataset.total_entries,
-          start_date: new Date().toISOString()
-        });
-      
-      if (createError) throw createError;
-      
-      toast.success(`Successfully joined dataset: "${dataset.name}"`);
-      
-      // Refresh list of tasks
-      await fetchLabelingTasks();
-      
-      // Reset invite code
-      setInviteCode('');
-      
-      // Don't redirect, stay on dashboard
-    } catch (error) {
-      console.error('Error joining dataset:', error);
-      toast.error('Failed to join dataset');
-    } finally {
-      setJoining(false);
-    }
-  };
-
   const calculateProgressPercent = (completed: number, total: number) => {
     if (total === 0) return 0;
     return Math.round((completed / total) * 100);
@@ -276,6 +206,10 @@ export default function LabelingPage() {
   if (loading) {
     return <LoadingScreen />;
   }
+
+  // Pisahkan tasks menjadi milik sendiri dan join
+  const myDatasets = tasks.filter(task => user && task.owner_username === user.username);
+  const joinedDatasets = tasks.filter(task => !user || task.owner_username !== user.username);
 
   return (
     <div className="pt-16 fixed inset-0 overflow-y-auto bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
@@ -312,26 +246,6 @@ export default function LabelingPage() {
                 Join and manage your labeling tasks
               </div>
             </div>
-            <div className="w-full md:w-auto">
-              <div className="backdrop-blur-sm bg-white/50 dark:bg-gray-800/50 rounded-xl p-1 pl-4 flex items-center space-x-2 w-full md:w-auto border border-white/20 dark:border-gray-700/50 shadow-md">
-                <FiTag className="text-indigo-500 dark:text-indigo-400" />
-                <Input 
-                  type="text"
-                  placeholder="Enter invite code"
-                  value={inviteCode}
-                  onChange={(e) => setInviteCode(e.target.value)}
-                  className="border-0 bg-transparent text-gray-900 dark:text-gray-100 placeholder:text-gray-500 dark:placeholder:text-gray-400 focus-visible:ring-0 focus-visible:ring-offset-0"
-                />
-                <Button 
-                  onClick={handleJoinDataset}
-                  isLoading={joining}
-                  disabled={joining}
-                  className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 text-white shadow-md hover:shadow-lg transition-all"
-                >
-                  Join Dataset
-                </Button>
-              </div>
-            </div>
           </div>
         </motion.div>
 
@@ -349,8 +263,6 @@ export default function LabelingPage() {
           </div>
           
           <Button 
-            variant="outline" 
-            size="sm" 
             onClick={refreshData}
             className="relative border-white/20 dark:border-gray-700/50 hover:border-indigo-300 dark:hover:border-indigo-700 bg-white/70 dark:bg-gray-800/70 text-gray-700 dark:text-gray-300 backdrop-blur-sm shadow-sm"
             disabled={refreshing}
@@ -372,125 +284,233 @@ export default function LabelingPage() {
               </div>
               <h3 className="text-xl font-medium bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent mb-2">No labeling tasks yet</h3>
               <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md mx-auto">
-                Enter an invite code above to join a dataset and start labeling, or ask a dataset owner for an invite code.
+                Click the button below to join a dataset and start labeling, or ask a dataset owner for an invite code.
               </p>
-              <div className="backdrop-blur-sm bg-white/50 dark:bg-gray-800/50 p-5 rounded-lg max-w-md mx-auto border border-white/20 dark:border-gray-700/50 shadow-md">
-                <div className="flex items-start gap-3">
-                  <div className="text-indigo-500 dark:text-indigo-400 mt-1">
-                    <FiInfo className="h-5 w-5" />
-                  </div>
-                  <div className="text-sm text-left">
-                    <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-1">How to get started:</h4>
-                    <ol className="list-decimal list-inside space-y-2 text-gray-600 dark:text-gray-300">
-                      <li>Ask a dataset owner for their invite code</li>
-                      <li>Enter the code in the field above</li>
-                      <li>Start contributing to the dataset labeling</li>
-                    </ol>
-                  </div>
-                </div>
-              </div>
+              <Link href="/datasets/join">
+                  <Button className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg hover:shadow-xl transition-all">
+                      Join a Dataset
+                  </Button>
+              </Link>
             </div>
           </motion.div>
         ) : (
-          <div className="space-y-5 pb-10">
-            {tasks.map((task, index) => {
-              const progressPercent = calculateProgressPercent(task.completed, task.total_entries);
-              const progressColor = getProgressColor(progressPercent);
-              const remainingItems = task.total_entries - task.completed;
-              
-              return (
-                <motion.div
-                  key={task.id}
-                  initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  transition={{ duration: 0.3, delay: index * 0.05 }}
-                  whileHover={{ y: -5, scale: 1.02 }}
-                  className="transform transition-all duration-300"
-                >
-                  <Card className="backdrop-blur-sm bg-white/70 dark:bg-gray-800/70 border border-white/20 dark:border-gray-700/50 shadow-lg hover:shadow-xl transition-all overflow-hidden">
-                    <div className={`h-1 w-full ${progressColor}`}></div>
-                    <CardHeader className="pb-2">
-                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                        <div>
-                          <CardTitle className="text-gray-900 dark:text-white font-bold">{task.dataset_name}</CardTitle>
-                          <CardDescription className="flex items-center flex-wrap gap-1 mt-1">
-                            {getProgressStatusIcon(progressPercent)}
-                            <span className="text-gray-600 dark:text-gray-300">{getProgressStatusText(progressPercent)}</span>
-                            
-                            <Badge 
-                              variant={progressPercent === 100 ? 'success' : progressPercent >= 50 ? 'default' : 'secondary'} 
-                              className="ml-2 shadow-sm"
-                            >
-                              {progressPercent}% complete
-                            </Badge>
-                            
-                            <span className="ml-3 text-gray-500 dark:text-gray-400">
-                              Owner: <span className="font-medium">{task.owner_username}</span>
-                            </span>
-                          </CardDescription>
-                        </div>
-                        <Link href={`/labeling/${task.dataset_id}`}>
-                          <Button 
-                            className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 text-white shadow-md hover:shadow-lg transition-all"
-                          >
-                            <div className="flex items-center">
-                              {progressPercent === 100 ? 'Review Labels' : 'Continue Labeling'} 
-                              <FiArrowRight className="ml-2 group-hover:translate-x-1 transition-transform" />
-                            </div>
-                          </Button>
-                        </Link>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        <div>
-                          <div className="flex justify-between text-sm mb-1 font-medium">
-                            <span className="text-gray-700 dark:text-gray-300">Progress</span>
-                            <span className="text-gray-900 dark:text-gray-100">
-                              <span className="font-bold">{task.completed}</span> of {task.total_entries} labeled
-                            </span>
-                          </div>
-                          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 overflow-hidden">
-                            <motion.div 
-                              initial={{ width: 0 }}
-                              animate={{ width: `${progressPercent}%` }}
-                              transition={{ duration: 1, delay: 0.2 }}
-                              className={`${progressColor} h-2.5 rounded-full`}
-                            ></motion.div>
-                          </div>
-                        </div>
-                        
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div className="flex items-center p-3 backdrop-blur-sm bg-white/50 dark:bg-gray-800/50 rounded-lg border border-white/20 dark:border-gray-700/50 shadow-sm">
-                            <div className={`w-8 h-8 flex items-center justify-center rounded-full ${progressPercent === 100 ? 'bg-gradient-to-br from-green-400 to-green-600 text-white' : 'bg-gradient-to-br from-blue-400 to-indigo-600 text-white'}`}>
-                              {progressPercent === 100 ? <FiCheck /> : <FiEdit />}
-                            </div>
-                            <div className="ml-3">
-                              <div className="text-sm font-medium text-gray-900 dark:text-white">{task.completed}</div>
-                              <div className="text-xs text-gray-500 dark:text-gray-400">Labels completed</div>
-                            </div>
-                          </div>
-                          
-                          <div className="flex items-center p-3 backdrop-blur-sm bg-white/50 dark:bg-gray-800/50 rounded-lg border border-white/20 dark:border-gray-700/50 shadow-sm">
-                            <div className={`w-8 h-8 flex items-center justify-center rounded-full ${remainingItems === 0 ? 'bg-gradient-to-br from-green-400 to-green-600 text-white' : 'bg-gradient-to-br from-amber-400 to-orange-600 text-white'}`}>
-                              {remainingItems === 0 ? <FiCheckCircle /> : <FiClock />}
-                            </div>
-                            <div className="ml-3">
-                              <div className="text-sm font-medium text-gray-900 dark:text-white">
-                                {remainingItems === 0 ? 'All done!' : `${remainingItems} remaining`}
+          <div className="space-y-10 pb-10">
+            {/* Section: Datasets Saya */}
+            <div>
+              <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Datasets Saya</h2>
+              {myDatasets.length === 0 ? (
+                <div className="text-gray-500 dark:text-gray-400 italic mb-6">Belum ada dataset yang Anda miliki.</div>
+              ) : (
+                <div className="space-y-5">
+                  {myDatasets.map((task, index) => {
+                    const progressPercent = calculateProgressPercent(task.completed, task.total_entries);
+                    const progressColor = getProgressColor(progressPercent);
+                    const remainingItems = task.total_entries - task.completed;
+                    return (
+                      <motion.div
+                        key={task.id}
+                        initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        transition={{ duration: 0.3, delay: index * 0.05 }}
+                        whileHover={{ y: -5, scale: 1.02 }}
+                        className="transform transition-all duration-300"
+                      >
+                        <Card className="backdrop-blur-sm bg-white/70 dark:bg-gray-800/70 border border-white/20 dark:border-gray-700/50 shadow-lg hover:shadow-xl transition-all overflow-hidden">
+                          <div className={`h-1 w-full ${progressColor}`}></div>
+                          <CardHeader className="pb-2">
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                              <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <CardTitle className="text-gray-900 dark:text-white font-bold">{task.dataset_name}</CardTitle>
+                                  <Badge variant="success" className="ml-2">Owner</Badge>
+                                </div>
+                                <CardDescription className="flex items-center flex-wrap gap-1 mt-1">
+                                  {getProgressStatusIcon(progressPercent)}
+                                  <span className="text-gray-600 dark:text-gray-300">{getProgressStatusText(progressPercent)}</span>
+                                  <Badge 
+                                    variant={progressPercent === 100 ? 'success' : progressPercent >= 50 ? 'default' : 'secondary'} 
+                                    className="ml-2 shadow-sm"
+                                  >
+                                    {progressPercent}% complete
+                                  </Badge>
+                                  <span className="ml-3 text-gray-500 dark:text-gray-400">
+                                    Owner: <span className="font-medium">{task.owner_username}</span>
+                                  </span>
+                                </CardDescription>
                               </div>
-                              <div className="text-xs text-gray-500 dark:text-gray-400">
-                                {remainingItems === 0 ? 'Completed' : 'Labels to go'}
+                              <Link href={`/labeling/${task.dataset_id}`}>
+                                <Button 
+                                  className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 text-white shadow-md hover:shadow-lg transition-all"
+                                >
+                                  <div className="flex items-center">
+                                    {progressPercent === 100 ? 'Review Labels' : 'Continue Labeling'} 
+                                    <FiArrowRight className="ml-2 group-hover:translate-x-1 transition-transform" />
+                                  </div>
+                                </Button>
+                              </Link>
+                            </div>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-4">
+                              <div>
+                                <div className="flex justify-between text-sm mb-1 font-medium">
+                                  <span className="text-gray-700 dark:text-gray-300">Progress</span>
+                                  <span className="text-gray-900 dark:text-gray-100">
+                                    <span className="font-bold">{task.completed}</span> of {task.total_entries} labeled
+                                  </span>
+                                </div>
+                                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 overflow-hidden">
+                                  <motion.div 
+                                    initial={{ width: 0 }}
+                                    animate={{ width: `${progressPercent}%` }}
+                                    transition={{ duration: 1, delay: 0.2 }}
+                                    className={`${progressColor} h-2.5 rounded-full`}
+                                  ></motion.div>
+                                </div>
+                              </div>
+                              
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div className="flex items-center p-3 backdrop-blur-sm bg-white/50 dark:bg-gray-800/50 rounded-lg border border-white/20 dark:border-gray-700/50 shadow-sm">
+                                  <div className={`w-8 h-8 flex items-center justify-center rounded-full ${progressPercent === 100 ? 'bg-gradient-to-br from-green-400 to-green-600 text-white' : 'bg-gradient-to-br from-blue-400 to-indigo-600 text-white'}`}>
+                                    {progressPercent === 100 ? <FiCheck /> : <FiEdit />}
+                                  </div>
+                                  <div className="ml-3">
+                                    <div className="text-sm font-medium text-gray-900 dark:text-white">{task.completed}</div>
+                                    <div className="text-xs text-gray-500 dark:text-gray-400">Labels completed</div>
+                                  </div>
+                                </div>
+                                
+                                <div className="flex items-center p-3 backdrop-blur-sm bg-white/50 dark:bg-gray-800/50 rounded-lg border border-white/20 dark:border-gray-700/50 shadow-sm">
+                                  <div className={`w-8 h-8 flex items-center justify-center rounded-full ${remainingItems === 0 ? 'bg-gradient-to-br from-green-400 to-green-600 text-white' : 'bg-gradient-to-br from-amber-400 to-orange-600 text-white'}`}>
+                                    {remainingItems === 0 ? <FiCheckCircle /> : <FiClock />}
+                                  </div>
+                                  <div className="ml-3">
+                                    <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                      {remainingItems === 0 ? 'All done!' : `${remainingItems} remaining`}
+                                    </div>
+                                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                                      {remainingItems === 0 ? 'Completed' : 'Labels to go'}
+                                    </div>
+                                  </div>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              );
-            })}
+                          </CardContent>
+                        </Card>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            {/* Section: Datasets Joined */}
+            <div>
+              <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Datasets Joined</h2>
+              {joinedDatasets.length === 0 ? (
+                <div className="text-gray-500 dark:text-gray-400 italic mb-6">Belum ada dataset yang Anda ikuti.</div>
+              ) : (
+                <div className="space-y-5">
+                  {joinedDatasets.map((task, index) => {
+                    const progressPercent = calculateProgressPercent(task.completed, task.total_entries);
+                    const progressColor = getProgressColor(progressPercent);
+                    const remainingItems = task.total_entries - task.completed;
+                    return (
+                      <motion.div
+                        key={task.id}
+                        initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        transition={{ duration: 0.3, delay: index * 0.05 }}
+                        whileHover={{ y: -5, scale: 1.02 }}
+                        className="transform transition-all duration-300"
+                      >
+                        <Card className="backdrop-blur-sm bg-white/70 dark:bg-gray-800/70 border border-white/20 dark:border-gray-700/50 shadow-lg hover:shadow-xl transition-all overflow-hidden">
+                          <div className={`h-1 w-full ${progressColor}`}></div>
+                          <CardHeader className="pb-2">
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                              <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <CardTitle className="text-gray-900 dark:text-white font-bold">{task.dataset_name}</CardTitle>
+                                  <Badge variant="secondary" className="ml-2">Joined</Badge>
+                                </div>
+                                <CardDescription className="flex items-center flex-wrap gap-1 mt-1">
+                                  {getProgressStatusIcon(progressPercent)}
+                                  <span className="text-gray-600 dark:text-gray-300">{getProgressStatusText(progressPercent)}</span>
+                                  <Badge 
+                                    variant={progressPercent === 100 ? 'success' : progressPercent >= 50 ? 'default' : 'secondary'} 
+                                    className="ml-2 shadow-sm"
+                                  >
+                                    {progressPercent}% complete
+                                  </Badge>
+                                  <span className="ml-3 text-gray-500 dark:text-gray-400">
+                                    Owner: <span className="font-medium">{task.owner_username}</span>
+                                  </span>
+                                </CardDescription>
+                              </div>
+                              <Link href={`/labeling/${task.dataset_id}`}>
+                                <Button 
+                                  className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 text-white shadow-md hover:shadow-lg transition-all"
+                                >
+                                  <div className="flex items-center">
+                                    {progressPercent === 100 ? 'Review Labels' : 'Continue Labeling'} 
+                                    <FiArrowRight className="ml-2 group-hover:translate-x-1 transition-transform" />
+                                  </div>
+                                </Button>
+                              </Link>
+                            </div>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-4">
+                              <div>
+                                <div className="flex justify-between text-sm mb-1 font-medium">
+                                  <span className="text-gray-700 dark:text-gray-300">Progress</span>
+                                  <span className="text-gray-900 dark:text-gray-100">
+                                    <span className="font-bold">{task.completed}</span> of {task.total_entries} labeled
+                                  </span>
+                                </div>
+                                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 overflow-hidden">
+                                  <motion.div 
+                                    initial={{ width: 0 }}
+                                    animate={{ width: `${progressPercent}%` }}
+                                    transition={{ duration: 1, delay: 0.2 }}
+                                    className={`${progressColor} h-2.5 rounded-full`}
+                                  ></motion.div>
+                                </div>
+                              </div>
+                              
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div className="flex items-center p-3 backdrop-blur-sm bg-white/50 dark:bg-gray-800/50 rounded-lg border border-white/20 dark:border-gray-700/50 shadow-sm">
+                                  <div className={`w-8 h-8 flex items-center justify-center rounded-full ${progressPercent === 100 ? 'bg-gradient-to-br from-green-400 to-green-600 text-white' : 'bg-gradient-to-br from-blue-400 to-indigo-600 text-white'}`}>
+                                    {progressPercent === 100 ? <FiCheck /> : <FiEdit />}
+                                  </div>
+                                  <div className="ml-3">
+                                    <div className="text-sm font-medium text-gray-900 dark:text-white">{task.completed}</div>
+                                    <div className="text-xs text-gray-500 dark:text-gray-400">Labels completed</div>
+                                  </div>
+                                </div>
+                                
+                                <div className="flex items-center p-3 backdrop-blur-sm bg-white/50 dark:bg-gray-800/50 rounded-lg border border-white/20 dark:border-gray-700/50 shadow-sm">
+                                  <div className={`w-8 h-8 flex items-center justify-center rounded-full ${remainingItems === 0 ? 'bg-gradient-to-br from-green-400 to-green-600 text-white' : 'bg-gradient-to-br from-amber-400 to-orange-600 text-white'}`}>
+                                    {remainingItems === 0 ? <FiCheckCircle /> : <FiClock />}
+                                  </div>
+                                  <div className="ml-3">
+                                    <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                      {remainingItems === 0 ? 'All done!' : `${remainingItems} remaining`}
+                                    </div>
+                                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                                      {remainingItems === 0 ? 'Completed' : 'Labels to go'}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </motion.div>

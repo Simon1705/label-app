@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { FiUser, FiLogOut, FiMenu, FiX, FiHome, FiDatabase, FiTag, FiUsers, FiGrid } from 'react-icons/fi';
+import { FiUser, FiLogOut, FiMenu, FiX, FiHome, FiDatabase, FiTag, FiUsers, FiGrid, FiPlusCircle } from 'react-icons/fi';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/Button';
@@ -103,6 +103,7 @@ export default function Navbar() {
                   <>
                     <NavLink href="/dashboard" icon={<FiHome />}>Dashboard</NavLink>
                     <NavLink href="/datasets" icon={<FiDatabase />}>My Datasets</NavLink>
+                    <NavLink href="/datasets/join" icon={<FiPlusCircle />}>Join Dataset</NavLink>
                     <NavLink href="/labeling" icon={<FiTag />}>Labeling</NavLink>
                   </>
                 )}
@@ -190,6 +191,7 @@ export default function Navbar() {
                   <>
                     <NavLink href="/dashboard" icon={<FiHome />}>Dashboard</NavLink>
                     <NavLink href="/datasets" icon={<FiDatabase />}>My Datasets</NavLink>
+                    <NavLink href="/datasets/join" icon={<FiPlusCircle />}>Join Dataset</NavLink>
                     <NavLink href="/labeling" icon={<FiTag />}>Labeling</NavLink>
                   </>
                 )

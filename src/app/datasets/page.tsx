@@ -13,7 +13,7 @@ import { FiPlus, FiDatabase, FiUsers, FiTag, FiShield, FiSearch, FiChevronRight,
 import { motion } from 'framer-motion';
 
 // Local Badge component
-type BadgeVariant = 'default' | 'secondary' | 'outline';
+type BadgeVariant = 'default' | 'secondary' | 'outline' | 'success';
 
 interface BadgeProps {
   variant?: BadgeVariant;
@@ -26,6 +26,7 @@ function Badge({ className, variant = 'default', children }: BadgeProps) {
     default: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 border-transparent",
     secondary: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-100 border-transparent",
     outline: "text-gray-700 border border-gray-200 dark:text-gray-300 dark:border-gray-700",
+    success: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 border-transparent",
   };
 
   return (
@@ -131,16 +132,13 @@ export default function DatasetsPage() {
   const fetchDatasets = useCallback(async () => {
     try {
       setLoading(true);
-      
       // Fetch datasets owned by the user
       const { data, error } = await supabase
         .from('datasets')
         .select('*')
         .eq('owner_id', user?.id)
         .order('created_at', { ascending: false });
-      
       if (error) throw error;
-      
       setDatasets(data || []);
     } catch (error) {
       console.error('Error fetching datasets:', error);
@@ -162,7 +160,7 @@ export default function DatasetsPage() {
     setTimeout(() => setRefreshing(false), 800);
   };
 
-  const filteredDatasets = datasets.filter((dataset: Dataset) => 
+  const filteredMyDatasets = datasets.filter((dataset: Dataset) => 
     dataset.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (dataset.description && dataset.description.toLowerCase().includes(searchTerm.toLowerCase()))
   );
@@ -248,8 +246,6 @@ export default function DatasetsPage() {
                 {datasets.length} Total Datasets
               </Badge>
               <Button 
-                variant="outline" 
-                size="sm" 
                 onClick={refreshData}
                 className="relative border-white/20 dark:border-gray-700/50 hover:border-indigo-300 dark:hover:border-indigo-700 bg-white/70 dark:bg-gray-800/70 text-gray-700 dark:text-gray-300 backdrop-blur-sm shadow-sm"
                 disabled={refreshing}
@@ -260,107 +256,62 @@ export default function DatasetsPage() {
           </div>
         </motion.div>
 
-        {filteredDatasets.length === 0 ? (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.3 }}
-            className="backdrop-blur-sm bg-white/70 dark:bg-gray-800/70 rounded-xl shadow-lg border border-white/20 dark:border-gray-700/50 p-8"
-          >
-            {searchTerm ? (
-              <div className="text-center">
-                <div className="w-20 h-20 mx-auto bg-gray-100/70 dark:bg-gray-700/70 rounded-full flex items-center justify-center mb-4">
-                  <FiSearch className="text-gray-400 h-8 w-8" />
-                </div>
-                <h3 className="text-xl font-medium text-gray-900 dark:text-white mb-2">No matching datasets</h3>
-                <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md mx-auto">
-                  No datasets match your search "{searchTerm}".
-                </p>
-                <Button 
-                  variant="outline" 
-                  onClick={() => setSearchTerm('')}
-                  className="bg-white/70 dark:bg-gray-700/70 border-white/20 dark:border-gray-700/50 hover:border-indigo-300 dark:hover:border-indigo-700"
+        {/* Section: My Datasets */}
+        <div className="mt-8">
+          <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">My Datasets</h2>
+          {filteredMyDatasets.length === 0 ? (
+            <div className="text-gray-500 dark:text-gray-400 italic mb-6">You have not uploaded any datasets yet.</div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-10">
+              {filteredMyDatasets.map((dataset, index) => (
+                <motion.div
+                  key={dataset.id}
+                  initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ duration: 0.3, delay: index * 0.05 }}
+                  whileHover={{ y: -5, scale: 1.02 }}
+                  className="transform transition-all duration-300"
                 >
-                  Clear Search
-                </Button>
-              </div>
-            ) : (
-              <div className="text-center">
-                <div className="h-24 w-24 mx-auto bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-2xl flex items-center justify-center shadow-lg mb-6 rotate-3">
-                  <FiDatabase className="text-white h-10 w-10" />
-                </div>
-                <h3 className="text-xl font-medium bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent mb-2">No datasets yet</h3>
-                <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md mx-auto">
-                  Upload a CSV file to create your first dataset for labeling.
-                </p>
-                <Button 
-                  onClick={() => router.push('/datasets/upload')} 
-                  className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 text-white shadow-lg"
-                >
-                  <FiPlus className="mr-2" /> Create Dataset
-                </Button>
-              </div>
-            )}
-          </motion.div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-10">
-            {filteredDatasets.map((dataset, index) => (
-              <motion.div
-                key={dataset.id}
-                initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{ duration: 0.3, delay: index * 0.05 }}
-                whileHover={{ y: -5, scale: 1.02 }}
-                className="transform transition-all duration-300"
-              >
-                <Card className="backdrop-blur-sm bg-white/70 dark:bg-gray-800/70 border border-white/20 dark:border-gray-700/50 shadow-lg hover:shadow-xl transition-all h-full overflow-hidden">
-                  <div className="absolute top-0 left-0 h-1 w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600"></div>
-                  <CardHeader className="pb-2">
-                    <div className="flex justify-between items-start">
-                      <CardTitle className="text-gray-900 dark:text-white font-bold">
-                        {dataset.name}
-                      </CardTitle>
-                      <Badge variant="secondary" className="bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-100">
-                        {dataset.total_entries} entries
-                      </Badge>
-                    </div>
-                    <CardDescription className="text-gray-500 dark:text-gray-400">
-                      Created on {formatDate(dataset.created_at)}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-2">
-                    <div className="space-y-3">
-                      <p className="text-gray-600 dark:text-gray-300 text-sm min-h-[3em] line-clamp-2">
-                        {dataset.description || "No description provided"}
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        <div className="flex items-center backdrop-blur-sm bg-white/50 dark:bg-gray-800/50 border border-white/20 dark:border-gray-700/50 px-3 py-1 rounded-full text-xs shadow-sm">
-                          <FiUsers className="mr-2 text-indigo-500 dark:text-indigo-400" />
-                          <span className="text-gray-700 dark:text-gray-300">Team labeling</span>
-                        </div>
-                        <div className="flex items-center backdrop-blur-sm bg-white/50 dark:bg-gray-800/50 border border-white/20 dark:border-gray-700/50 px-3 py-1 rounded-full text-xs shadow-sm">
-                          <FiTag className="mr-2 text-pink-500 dark:text-pink-400" />
-                          <span className="text-gray-700 dark:text-gray-300">Code: {dataset.invite_code}</span>
+                  <Card className="backdrop-blur-sm bg-white/70 dark:bg-gray-800/70 border border-white/20 dark:border-gray-700/50 shadow-lg hover:shadow-xl transition-all h-full overflow-hidden">
+                    <div className="absolute top-0 left-0 h-1 w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600"></div>
+                    <CardHeader className="pb-2">
+                      <div className="flex justify-between items-start">
+                        <CardTitle className="text-gray-900 dark:text-white font-bold">
+                          {dataset.name}
+                        </CardTitle>
+                        <Badge variant="success" className="ml-2">Owner</Badge>
+                      </div>
+                      <CardDescription className="text-gray-500 dark:text-gray-400">
+                        Created on {formatDate(dataset.created_at)}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="pt-2">
+                      <div className="space-y-3">
+                        <p className="text-gray-600 dark:text-gray-300 text-sm min-h-[3em] line-clamp-2">
+                          {dataset.description || "No description provided"}
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          <Badge variant="secondary">{dataset.total_entries} entries</Badge>
+                          <Badge variant="outline">Code: {dataset.invite_code}</Badge>
                         </div>
                       </div>
-                    </div>
-                  </CardContent>
-                  <CardFooter className="border-t border-gray-200 dark:border-gray-700/30 pt-4 flex justify-between">
-                    <Link href={`/datasets/${dataset.id}`} className="w-full">
-                      <Button 
-                        variant="outline" 
-                        className="w-full bg-white/50 dark:bg-gray-800/50 border-white/20 dark:border-gray-700/50 hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 dark:hover:from-indigo-900/20 dark:hover:to-purple-900/20 hover:border-indigo-200 dark:hover:border-indigo-800 transition-all text-gray-700 dark:text-gray-300"
-                      >
-                        View Details
-                        <FiChevronRight className="ml-2 group-hover:translate-x-1 transition-transform" />
-                      </Button>
-                    </Link>
-                  </CardFooter>
-                </Card>
-              </motion.div>
-            ))}
-          </div>
-        )}
+                    </CardContent>
+                    <CardFooter className="border-t border-gray-200 dark:border-gray-700/30 pt-4 flex justify-between">
+                      <Link href={`/datasets/${dataset.id}`} className="w-full">
+                        <Button 
+                          className="w-full bg-white/50 dark:bg-gray-800/50 border-white/20 dark:border-gray-700/50 hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 dark:hover:from-indigo-900/20 dark:hover:to-purple-900/20 hover:border-indigo-200 dark:hover:border-indigo-800 transition-all text-gray-700 dark:text-gray-300"
+                        >
+                          View Details
+                          <FiChevronRight className="ml-2 group-hover:translate-x-1 transition-transform" />
+                        </Button>
+                      </Link>
+                    </CardFooter>
+                  </Card>
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </div>
       </motion.div>
     </div>
   );
