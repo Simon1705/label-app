@@ -118,6 +118,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
             completed: 0,
             total: totalEntries,
             last_page: 0, // Add last page tracking
+            start_date: new Date().toISOString(), // Set start_date when first creating the record
           })
           .select('*')
           .single();
@@ -908,16 +909,28 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       } else {
         // If record exists, update the completed count
         // If all entries are now completed, set the completed_date
+        // IMPORTANT: Do NOT update start_date here to preserve the original start date
         const isNowComplete = completed === (dataset?.total_entries || 0);
         const wasNotPreviouslyComplete = existingProgress.completed < (dataset?.total_entries || 0);
         
+        const updateData: any = {
+          completed: completed,
+          total: dataset?.total_entries || 0,
+        };
+        
+        // Only set completed_date if work is now complete and wasn't before
+        if (isNowComplete && wasNotPreviouslyComplete) {
+          updateData.completed_date = now;
+        }
+        
+        // Ensure start_date is preserved - only set it if it doesn't exist
+        if (!existingProgress.start_date) {
+          updateData.start_date = now;
+        }
+        
         const { error: updateError } = await supabase
           .from('label_progress')
-          .update({
-            completed: completed,
-            total: dataset?.total_entries || 0,
-            ...(isNowComplete && wasNotPreviouslyComplete ? { completed_date: now } : {})
-          })
+          .update(updateData)
           .eq('dataset_id', id)
           .eq('user_id', user.id);
         
