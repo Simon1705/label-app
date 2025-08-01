@@ -40,7 +40,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
   const [selectedLabels, setSelectedLabels] = useState<Record<string, LabelOption>>({});
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [progress, setProgress] = useState({ completed: 0, total: 0 });
+  const [progress, setProgress] = useState({ completed: 0, total: 0, start_date: null as string | null });
   const [entriesPerPage, setEntriesPerPage] = useState(10);
   const [completedEntries, setCompletedEntries] = useState<Set<string>>(new Set());
   const [previousLabels, setPreviousLabels] = useState<Record<string, LabelOption>>({});
@@ -132,9 +132,10 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       }
       
       setDataset(datasetData);
-          setProgress({
+      setProgress({
         completed: progressRecord?.completed || 0,
-        total: progressRecord?.total || 0
+        total: progressRecord?.total || 0,
+        start_date: progressRecord?.start_date || null
       });
       
       // Determine which page to load - use last_page if available, otherwise start from 0
@@ -619,20 +620,31 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       // Update progress jika ada label baru
       if (newCompletedCount > 0) {
         const newTotal = Math.min(progress.completed + newCompletedCount, progress.total);
+        
+        const progressUpdateData: { completed: number; start_date?: string } = {
+            completed: newTotal,
+        };
+
+        // If there's no start date yet, set it now. This handles legacy cases.
+        if (!progress.start_date) {
+            progressUpdateData.start_date = new Date().toISOString();
+        }
+
         const { error: progressError } = await supabase
-          .from('label_progress')
-          .update({ completed: newTotal })
+            .from('label_progress')
+            .update(progressUpdateData)
             .eq('dataset_id', id)
             .eq('user_id', user?.id);
-          
+        
         if (progressError) {
-          console.error('❌ Error updating progress:', progressError);
-          throw progressError;
+            console.error('❌ Error updating progress:', progressError);
+            throw progressError;
         }
         
         setProgress(prev => ({ 
-          ...prev, 
-          completed: newTotal
+            ...prev, 
+            completed: newTotal,
+            start_date: prev.start_date || progressUpdateData.start_date || null
         }));
       }
       
@@ -871,82 +883,6 @@ export default function LabelingClient({ id }: LabelingClientProps) {
     
     return range;
   }
-  
-  const updateProgress = async (completed: number) => {
-    if (!user) return;
-    
-    try {
-      // Check if a progress record already exists
-      const { data: existingProgress, error: progressError } = await supabase
-        .from('label_progress')
-        .select('*')
-        .eq('dataset_id', id)
-        .eq('user_id', user.id)
-        .single();
-      
-      const now = new Date().toISOString();
-      
-      if (progressError && progressError.code !== 'PGRST116') {
-        console.error('Error checking progress:', progressError);
-        return;
-      }
-      
-      // If no record exists, create one with start_date
-      if (!existingProgress) {
-        const { error: insertError } = await supabase
-          .from('label_progress')
-          .insert({
-            dataset_id: id,
-            user_id: user.id,
-            completed: completed,
-            total: dataset?.total_entries || 0,
-            start_date: now
-          });
-        
-        if (insertError) {
-          console.error('Error saving progress:', insertError);
-        }
-      } else {
-        // If record exists, update the completed count
-        // If all entries are now completed, set the completed_date
-        // IMPORTANT: Do NOT update start_date here to preserve the original start date
-        const isNowComplete = completed === (dataset?.total_entries || 0);
-        const wasNotPreviouslyComplete = existingProgress.completed < (dataset?.total_entries || 0);
-        
-        const updateData: any = {
-          completed: completed,
-          total: dataset?.total_entries || 0,
-        };
-        
-        // Only set completed_date if work is now complete and wasn't before
-        if (isNowComplete && wasNotPreviouslyComplete) {
-          updateData.completed_date = now;
-        }
-        
-        // Ensure start_date is preserved - only set it if it doesn't exist
-        if (!existingProgress.start_date) {
-          updateData.start_date = now;
-        }
-        
-        const { error: updateError } = await supabase
-          .from('label_progress')
-          .update(updateData)
-          .eq('dataset_id', id)
-          .eq('user_id', user.id);
-        
-        if (updateError) {
-          console.error('Error saving progress:', updateError);
-        }
-      }
-      
-      setProgress({
-        completed: completed,
-        total: dataset?.total_entries || 0
-      });
-    } catch (error) {
-      console.error('Error updating progress:', error);
-    }
-  };
   
   if (loading) {
     return (
@@ -1429,4 +1365,4 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       <div className="pb-24"></div>
     </div>
   );
-} 
+}
