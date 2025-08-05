@@ -867,6 +867,14 @@ export default function DatasetDetailsClient({ id }: DatasetDetailsClientProps) 
                                   : 'Not started yet'}
                               </span>
                             </div>
+                            {userProgress?.last_updated && (
+                              <div className="flex items-center text-xs">
+                                <FiClock className="text-indigo-500 dark:text-indigo-400 mr-1.5" size={12} />
+                                <span className="text-gray-600 dark:text-gray-400">
+                                  Last Updated: {formatDate(userProgress.last_updated)}
+                                </span>
+                              </div>
+                            )}
                             {(progressPercent === 100 || userProgress.completed === userProgress.total) && (
                               <div className="flex items-center text-xs">
                                 <FiCheck className="text-green-500 dark:text-green-400 mr-1.5" size={12} />

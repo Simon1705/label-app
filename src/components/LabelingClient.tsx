@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Button } from '@/components/ui/Button';
 import { toast } from 'react-hot-toast';
 import { calculateProgress, cn } from '@/lib/utils';
-import { FiArrowRight, FiArrowLeft, FiCheck, FiX, FiMinus, FiStar, FiLoader, FiAlertCircle, FiHome, FiArrowUp, FiBarChart, FiDatabase, FiChevronsLeft, FiChevronsRight } from 'react-icons/fi';
+import { FiArrowRight, FiArrowLeft, FiCheck, FiX, FiMinus, FiStar, FiLoader, FiAlertCircle, FiHome, FiArrowUp, FiBarChart, FiDatabase, FiChevronsLeft, FiChevronsRight, FiChevronDown } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // Local Skeleton component
@@ -46,6 +46,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
   const [previousLabels, setPreviousLabels] = useState<Record<string, LabelOption>>({});
   const [submittedLabels, setSubmittedLabels] = useState<Record<string, LabelOption>>({});
   const [debugMode, setDebugMode] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [entryOriginalOrder, setEntryOriginalOrder] = useState<Record<string, number>>({});
   
   // Completely rewritten fetchDatasetAndEntries function
@@ -516,7 +517,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
   
   // Modify handleSubmitLabels to use the new approach
   const handleSubmitLabels = async () => {
-    if (Object.keys(selectedLabels).length === 0) return;
+    if (Object.keys(selectedLabels).length === 0 || !user) return;
     
     try {
       console.log('⏳ Submitting labels:', selectedLabels);
@@ -617,36 +618,39 @@ export default function LabelingClient({ id }: LabelingClientProps) {
         newCompletedCount = actualNewLabels.length;
       }
 
-      // Update progress jika ada label baru
-      if (newCompletedCount > 0) {
-        const newTotal = Math.min(progress.completed + newCompletedCount, progress.total);
-        
-        const progressUpdateData: { completed: number; start_date?: string } = {
-            completed: newTotal,
+      // Update progress if there are any new or updated labels
+      if (newCompletedCount > 0 || updateLabels.length > 0) {
+        const progressUpdate: any = {
+          last_updated: new Date().toISOString(),
         };
 
-        // If there's no start date yet, set it now. This handles legacy cases.
-        if (!progress.start_date) {
-            progressUpdateData.start_date = new Date().toISOString();
+        if (newCompletedCount > 0) {
+          const newTotal = Math.min(progress.completed + newCompletedCount, progress.total);
+          progressUpdate.completed = newTotal;
+          if (!progress.start_date) {
+            progressUpdate.start_date = new Date().toISOString();
+          }
         }
 
         const { error: progressError } = await supabase
-            .from('label_progress')
-            .update(progressUpdateData)
-            .eq('dataset_id', id)
-            .eq('user_id', user?.id);
+          .from('label_progress')
+          .update(progressUpdate)
+          .eq('dataset_id', id)
+          .eq('user_id', user?.id);
         
         if (progressError) {
-            console.error('❌ Error updating progress:', progressError);
-            throw progressError;
+          console.error('❌ Error updating progress:', progressError);
+          throw progressError;
         }
         
         setProgress(prev => ({ 
-            ...prev, 
-            completed: newTotal,
-            start_date: prev.start_date || progressUpdateData.start_date || null
+          ...prev, 
+          ...progressUpdate,
+          completed: progressUpdate.completed !== undefined ? progressUpdate.completed : prev.completed,
+          start_date: progressUpdate.start_date || prev.start_date
         }));
       }
+      
       
       // Show success message
       const updateCount = updateLabels.length;
@@ -1022,18 +1026,30 @@ export default function LabelingClient({ id }: LabelingClientProps) {
               >
                 Back to Dashboard
               </Button>
-              <div className="flex items-center space-x-2 bg-white/10 rounded-md px-3 py-2">
-                <span className="text-sm text-white/90">Entries per page:</span>
-          <select 
-            value={entriesPerPage} 
-            onChange={(e) => changeEntriesPerPage(Number(e.target.value))}
-                  className="bg-white/20 text-white border-0 rounded-md px-2 py-1 text-sm"
-          >
-            <option value={10}>10</option>
-            <option value={25}>25</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-          </select>
+              <div className="relative inline-block text-left">
+                <div>
+                  <button type="button" onClick={() => setIsDropdownOpen(!isDropdownOpen)} className="inline-flex justify-center w-full rounded-md border border-white/20 shadow-sm px-4 py-2 bg-white/10 text-sm font-medium text-white hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-white" id="options-menu" aria-haspopup="true" aria-expanded="true">
+                    {entriesPerPage}
+                    <FiChevronDown className="-mr-1 ml-2 h-5 w-5" />
+                  </button>
+                </div>
+                <AnimatePresence>
+                  {isDropdownOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      transition={{ duration: 0.1 }}
+                      className="origin-top-right absolute right-0 mt-2 w-28 rounded-md shadow-lg bg-gray-800 ring-1 ring-black ring-opacity-5 z-10"
+                    >
+                      <div className="py-1" role="menu" aria-orientation="vertical" aria-labelledby="options-menu">
+                        {[10, 25, 50, 100].map(value => (
+                          <a href="#" key={value} onClick={(e) => { e.preventDefault(); changeEntriesPerPage(value); setIsDropdownOpen(false); }} className="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white" role="menuitem">{value} Entries</a>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
         </div>
       </div>

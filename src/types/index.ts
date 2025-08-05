@@ -39,6 +39,7 @@ export type LabelProgress = {
   total: number;
   start_date?: string;
   completed_date?: string;
+  last_updated?: string;
 };
 
 export type LabelOption = 'positive' | 'negative' | 'neutral'; 
