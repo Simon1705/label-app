@@ -101,7 +101,7 @@ export default function DatasetDetailsClient({ id }: DatasetDetailsClientProps) 
         usersData = users || [];
       }
 
-      // Backfill start_date from the first label if it's missing
+      // Backfill start_date and last_updated from labels if they're missing
       for (const p of progress || []) {
         if (!p.start_date && p.completed > 0) {
           const { data: firstLabel, error: firstLabelError } = await supabase
@@ -119,6 +119,27 @@ export default function DatasetDetailsClient({ id }: DatasetDetailsClientProps) 
             await supabase
               .from('label_progress')
               .update({ start_date: firstLabel.created_at })
+              .eq('id', p.id);
+          }
+        }
+
+        // Backfill last_updated from the latest label if it's missing
+        if (!p.last_updated && p.completed > 0) {
+          const { data: latestLabel, error: latestLabelError } = await supabase
+            .from('dataset_labels')
+            .select('created_at')
+            .eq('dataset_id', id)
+            .eq('user_id', p.user_id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+          
+          if (latestLabel) {
+            p.last_updated = latestLabel.created_at;
+            // Also update it in the database so we don't have to do this again
+            await supabase
+              .from('label_progress')
+              .update({ last_updated: latestLabel.created_at })
               .eq('id', p.id);
           }
         }
@@ -867,14 +888,14 @@ export default function DatasetDetailsClient({ id }: DatasetDetailsClientProps) 
                                   : 'Not started yet'}
                               </span>
                             </div>
-                            {userProgress?.last_updated && (
-                              <div className="flex items-center text-xs">
-                                <FiClock className="text-indigo-500 dark:text-indigo-400 mr-1.5" size={12} />
-                                <span className="text-gray-600 dark:text-gray-400">
-                                  Last Updated: {formatDate(userProgress.last_updated)}
-                                </span>
-                              </div>
-                            )}
+                            <div className="flex items-center text-xs">
+                              <FiClock className="text-indigo-500 dark:text-indigo-400 mr-1.5" size={12} />
+                              <span className="text-gray-600 dark:text-gray-400">
+                                Last Updated: {userProgress.last_updated
+                                  ? formatDate(userProgress.last_updated)
+                                  : 'Not updated yet'}
+                              </span>
+                            </div>
                             {(progressPercent === 100 || userProgress.completed === userProgress.total) && (
                               <div className="flex items-center text-xs">
                                 <FiCheck className="text-green-500 dark:text-green-400 mr-1.5" size={12} />
