@@ -74,6 +74,78 @@ export default function JoinLabeling() {
       
       if (createError) throw createError;
       
+      // Apply automatic negative labels for entries with scores 1-2
+      try {
+        // Find entries with scores 1-2 (with pagination to get all entries)
+        const negativeEntries = [];
+        let continueFetching = true;
+        let offset = 0;
+        const limit = 1000; // Supabase default limit
+        
+        while (continueFetching) {
+          const { data: batch, error: entriesError } = await supabase
+            .from('dataset_entries')
+            .select('id, score')
+            .eq('dataset_id', dataset.id)
+            .in('score', [1, 2])
+            .range(offset, offset + limit - 1);
+          
+          if (entriesError) {
+            throw entriesError;
+          }
+          
+          if (batch && batch.length > 0) {
+            negativeEntries.push(...batch);
+            // If we got less than the limit, we've fetched all entries
+            if (batch.length < limit) {
+              continueFetching = false;
+            } else {
+              offset += limit;
+            }
+          } else {
+            continueFetching = false;
+          }
+        }
+        
+        if (negativeEntries.length === 0) {
+          console.log('No entries with scores 1-2 found for automatic labeling');
+        } else {
+          // Create automatic labels
+          const automaticLabels = negativeEntries.map(entry => ({
+            dataset_id: dataset.id,
+            entry_id: entry.id,
+            user_id: user?.id,
+            label: 'negative'
+          }));
+          
+          const { error: labelError } = await supabase
+            .from('dataset_labels')
+            .insert(automaticLabels);
+          
+          if (labelError) {
+            console.error('Error inserting automatic labels:', labelError);
+            // Don't throw error here as we still want the user to join
+          } else {
+            // Update progress record with automatically labeled count
+            const { error: updateError } = await supabase
+              .from('label_progress')
+              .update({ completed: negativeEntries.length })
+              .eq('dataset_id', dataset.id)
+              .eq('user_id', user?.id);
+            
+            if (updateError) {
+              console.error('Error updating progress for automatic labels:', updateError);
+              // Don't throw error here as we still want the user to join
+            } else {
+              console.log(`Automatically labeled ${negativeEntries.length} entries as negative for user ${user?.id}`);
+            }
+          }
+        }
+      } catch (labelingError) {
+        console.error('Error during automatic labeling:', labelingError);
+        // Continue with the join process even if automatic labeling fails
+      }
+      
       toast.success('You have joined the labeling task!');
       router.push(`/labeling`);
     } catch (error) {

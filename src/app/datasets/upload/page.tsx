@@ -216,6 +216,9 @@ export default function UploadDataset() {
       
       // Break entries into chunks to avoid hitting limits
       const chunkSize = 500;
+      const entryIds: string[] = [];
+      const negativeEntries: { dataset_id: string; entry_id: string; user_id: string; label: 'negative' }[] = [];
+      
       for (let i = 0; i < rows.length; i += chunkSize) {
         try {
           const chunk = rows.slice(i, i + chunkSize).map(row => ({
@@ -226,18 +229,164 @@ export default function UploadDataset() {
           
           console.log(`Inserting chunk ${i/chunkSize + 1} of ${Math.ceil(rows.length/chunkSize)}, size: ${chunk.length}`);
           
-          const { error: entriesError } = await supabase
+          const { data: insertedEntries, error: entriesError } = await supabase
             .from('dataset_entries')
-            .insert(chunk);
+            .insert(chunk)
+            .select('id, score');
           
           if (entriesError) {
             console.error(`Error inserting chunk ${i/chunkSize + 1}:`, entriesError);
             throw entriesError;
           }
+          
+          // Collect entry IDs for automatic labeling
+          if (insertedEntries) {
+            entryIds.push(...insertedEntries.map(entry => entry.id));
+            
+            // Prepare automatic labels for scores 1-2
+            if (hasScoreColumn) {
+              insertedEntries.forEach(entry => {
+                const score = entry.score;
+                if (score !== null && score >= 1 && score <= 2) {
+                  negativeEntries.push({
+                    dataset_id: dataset.id,
+                    entry_id: entry.id,
+                    user_id: user?.id as string,
+                    label: 'negative'
+                  });
+                }
+              });
+            }
+          }
         } catch (chunkError) {
           console.error(`Failed to process chunk starting at row ${i}:`, chunkError);
           throw chunkError;
         }
+      }
+      
+      // Insert automatic labels for entries with scores 1-2 for the owner
+      if (negativeEntries.length > 0) {
+        const { error: labelError } = await supabase
+          .from('dataset_labels')
+          .insert(negativeEntries);
+        
+        if (labelError) {
+          console.error('Error inserting automatic labels:', labelError);
+        } else {
+          console.log(`Automatically labeled ${negativeEntries.length} entries as negative for owner`);
+          
+          // Update progress for automatically labeled entries for the owner
+          const { error: progressError } = await supabase
+            .from('label_progress')
+            .update({ 
+              completed: negativeEntries.length,
+              last_updated: new Date().toISOString()
+            })
+            .eq('dataset_id', dataset.id)
+            .eq('user_id', user?.id);
+          
+          if (progressError) {
+            console.error('Error updating progress for owner:', progressError);
+          }
+        }
+      }
+      
+      // Apply automatic labels for all users who have joined this dataset
+      try {
+        // Find all users who have joined this dataset (excluding the owner)
+        const { data: joinedUsers, error: usersError } = await supabase
+          .from('label_progress')
+          .select('user_id')
+          .eq('dataset_id', dataset.id)
+          .neq('user_id', user?.id);
+        
+        // Find all entries with scores 1-2 (with pagination to get all entries)
+        const allNegativeEntries = [];
+        let continueFetching = true;
+        let offset = 0;
+        const limit = 1000; // Supabase default limit
+        
+        while (continueFetching) {
+          const { data: batch, error: entriesError } = await supabase
+            .from('dataset_entries')
+            .select('id, score')
+            .eq('dataset_id', dataset.id)
+            .in('score', [1, 2])
+            .range(offset, offset + limit - 1);
+          
+          if (entriesError) {
+            throw entriesError;
+          }
+          
+          if (batch && batch.length > 0) {
+            allNegativeEntries.push(...batch);
+            // If we got less than the limit, we've fetched all entries
+            if (batch.length < limit) {
+              continueFetching = false;
+            } else {
+              offset += limit;
+            }
+          } else {
+            continueFetching = false;
+          }
+        }
+        
+        if (usersError) {
+          console.error('Error fetching joined users:', usersError);
+        } else if (joinedUsers && joinedUsers.length > 0 && allNegativeEntries.length > 0) {
+          // Create automatic labels for each joined user
+          const allAutomaticLabels = [];
+          const userProgressUpdates = [];
+          
+          for (const joinedUser of joinedUsers) {
+            // Create labels for this user
+            const userLabels = allNegativeEntries.map(entry => ({
+              dataset_id: dataset.id,
+              entry_id: entry.id,
+              user_id: joinedUser.user_id,
+              label: 'negative'
+            }));
+            
+            allAutomaticLabels.push(...userLabels);
+            
+            // Prepare progress update for this user
+            userProgressUpdates.push({
+              user_id: joinedUser.user_id,
+              completed: allNegativeEntries.length
+            });
+          }
+          
+          // Insert all automatic labels for joined users
+          if (allAutomaticLabels.length > 0) {
+            const { error: bulkLabelError } = await supabase
+              .from('dataset_labels')
+              .insert(allAutomaticLabels);
+            
+            if (bulkLabelError) {
+              console.error('Error inserting automatic labels for joined users:', bulkLabelError);
+            } else {
+              console.log(`Automatically labeled ${allAutomaticLabels.length} entries for ${joinedUsers.length} joined users (based on ${allNegativeEntries.length} entries with scores 1-2)`);
+              
+              // Update progress for all joined users
+              for (const update of userProgressUpdates) {
+                const { error: userProgressError } = await supabase
+                  .from('label_progress')
+                  .update({ 
+                    completed: update.completed,
+                    last_updated: new Date().toISOString()
+                  })
+                  .eq('dataset_id', dataset.id)
+                  .eq('user_id', update.user_id);
+                
+                if (userProgressError) {
+                  console.error(`Error updating progress for user ${update.user_id}:`, userProgressError);
+                }
+              }
+            }
+          }
+        }
+      } catch (joinedUsersError) {
+        console.error('Error applying automatic labels to joined users:', joinedUsersError);
       }
       
       // All chunks inserted successfully

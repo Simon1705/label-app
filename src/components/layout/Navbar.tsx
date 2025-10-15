@@ -130,7 +130,7 @@ export default function Navbar() {
                   variant="ghost" 
                   size="sm" 
                   onClick={logout}
-                  className="text-gray-700 dark:text-gray-200 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400 transition-colors"
+                  className="text-gray-700 dark:text-gray-200 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400 transition-colors cursor-pointer"
                 >
                   <FiLogOut className="mr-1" /> Logout
                 </Button>
@@ -213,7 +213,7 @@ export default function Navbar() {
                   </div>
                   <button
                     onClick={logout}
-                    className="flex w-full items-center px-3 py-2 rounded-lg text-sm font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                    className="flex w-full items-center px-3 py-2 rounded-lg text-sm font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors cursor-pointer"
                   >
                     <FiLogOut className="mr-2" /> Logout
                   </button>

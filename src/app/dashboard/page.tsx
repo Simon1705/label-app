@@ -4,10 +4,10 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { Dataset, LabelProgress } from '@/types';
+import { Dataset, LabelProgress, User } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { FiUpload, FiTag, FiGrid, FiChevronRight, FiActivity, FiBarChart2, FiBox, FiUser, FiLoader, FiPlusCircle } from 'react-icons/fi';
+import { FiUpload, FiTag, FiGrid, FiChevronRight, FiActivity, FiBarChart2, FiBox, FiUser, FiLoader, FiPlusCircle, FiUsers } from 'react-icons/fi';
 import Link from 'next/link';
 import { calculateProgress, cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
@@ -112,6 +112,7 @@ export default function Dashboard() {
   const [progress, setProgress] = useState<LabelProgress[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
+  const [datasetLabelers, setDatasetLabelers] = useState<Record<string, { users: User[], progress: LabelProgress[] }>>({});
 
   const fetchData = useCallback(async () => {
     try {
@@ -157,15 +158,64 @@ export default function Dashboard() {
       
       if (progressError) throw progressError;
       
+      // Fetch labelers progress for all datasets (owned and joined)
+      const datasetLabelersData: Record<string, { users: User[], progress: LabelProgress[] }> = {};
+      
+      // Process owned datasets
+      for (const dataset of ownedDatasets || []) {
+        await fetchLabelersForDataset(dataset.id, datasetLabelersData);
+      }
+      
+      // Process joined datasets
+      for (const dataset of invitedDatasetsArray || []) {
+        // Only fetch labelers if user is the owner or if it's a joined dataset
+        if (dataset.owner_id !== user?.id) {
+          await fetchLabelersForDataset(dataset.id, datasetLabelersData);
+        }
+      }
+      
       setMyDatasets(ownedDatasets || []);
       setInvitedDatasets(invitedDatasetsArray);
       setProgress(progressData || []);
+      setDatasetLabelers(datasetLabelersData);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
       setLoadingData(false);
     }
   }, [user?.id]);
+
+  // Helper function to fetch labelers for a dataset
+  const fetchLabelersForDataset = async (datasetId: string, datasetLabelersData: Record<string, { users: User[], progress: LabelProgress[] }>) => {
+    // Fetch all progress records for this dataset
+    const { data: datasetProgress, error: progressError } = await supabase
+      .from('label_progress')
+      .select('*')
+      .eq('dataset_id', datasetId);
+    
+    if (!progressError && datasetProgress) {
+      // Get unique user IDs
+      const userIds = [...new Set(datasetProgress.map(p => p.user_id))];
+      
+      // Fetch user data for these users
+      let usersData: User[] = [];
+      if (userIds.length > 0) {
+        const { data: users, error: usersError } = await supabase
+          .from('users')
+          .select('*')
+          .in('id', userIds);
+        
+        if (!usersError) {
+          usersData = users || [];
+        }
+      }
+      
+      datasetLabelersData[datasetId] = {
+        users: usersData,
+        progress: datasetProgress
+      };
+    }
+  };
 
   useEffect(() => {
     if (user) {
@@ -232,7 +282,7 @@ export default function Dashboard() {
               </div>
             </div>
             <Link href="/datasets/upload">
-              <Button className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 text-white shadow-lg hover:shadow-xl transition-all">
+              <Button className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 text-white shadow-lg hover:shadow-xl transition-all cursor-pointer">
                 <FiUpload className="mr-2" /> Upload New Dataset
               </Button>
             </Link>
@@ -298,29 +348,119 @@ export default function Dashboard() {
                       <div className="text-gray-500 dark:text-gray-400 italic mb-6">You have not uploaded any datasets yet.</div>
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {myDatasets.map((dataset) => (
-                          <Card key={dataset.id} className="backdrop-blur-sm bg-white/80 dark:bg-gray-800/80 border border-white/20 dark:border-gray-700/50 shadow-lg hover:shadow-xl transition-all overflow-hidden">
-                            <div className="absolute top-0 left-0 h-1 w-full bg-gradient-to-r from-blue-500 to-indigo-500"></div>
-                            <CardHeader>
-                              <div className="flex items-center gap-2 mb-1">
-                                <CardTitle className="text-gray-900 dark:text-white font-bold">{dataset.name}</CardTitle>
-                                <Badge variant="success">Owner</Badge>
-                              </div>
-                              <CardDescription className="text-gray-600 dark:text-gray-300">{dataset.description || 'No description'}</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                              <div className="flex items-center gap-2 mb-2">
-                                <Badge variant="secondary">{dataset.total_entries} entries</Badge>
-                                <Badge variant="default">{getProgressForDataset(dataset.id)}% complete</Badge>
-                              </div>
-                              <Link href={`/datasets/${dataset.id}`}>
-                                <Button className="w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 text-white shadow-md hover:shadow-lg transition-all mt-2">
-                                  View Dataset <FiChevronRight className="ml-2" />
-                                </Button>
-                              </Link>
-                            </CardContent>
-                          </Card>
-                        ))}
+                        {myDatasets.map((dataset) => {
+                          const datasetProgress = progress.find((p: LabelProgress) => p.dataset_id === dataset.id);
+                          const labelersData = datasetLabelers[dataset.id];
+                          return (
+                            <Card key={dataset.id} className="backdrop-blur-sm bg-white/80 dark:bg-gray-800/80 border border-white/20 dark:border-gray-700/50 shadow-lg hover:shadow-xl transition-all overflow-hidden rounded-xl">
+                              <div className="absolute top-0 left-0 h-1.5 w-full bg-gradient-to-r from-blue-500 to-indigo-500"></div>
+                              <CardHeader className="pb-3">
+                                <div className="flex items-start justify-between gap-2 mb-2">
+                                  <CardTitle className="text-gray-900 dark:text-white font-bold text-lg">{dataset.name}</CardTitle>
+                                  <Badge variant="success" className="text-xs py-1 px-2">Owner</Badge>
+                                </div>
+                                <CardDescription className="text-gray-600 dark:text-gray-300 text-sm line-clamp-2 min-h-[2.5rem]">
+                                  {dataset.description || 'No description provided'}
+                                </CardDescription>
+                              </CardHeader>
+                              <CardContent>
+                                <div className="space-y-3">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <FiBox className="text-gray-500 dark:text-gray-400" />
+                                      <span className="text-sm text-gray-700 dark:text-gray-300">
+                                        {dataset.total_entries} entries
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <FiActivity className="text-gray-500 dark:text-gray-400" />
+                                      <span className="text-sm font-medium text-gray-900 dark:text-white">
+                                        {datasetProgress ? datasetProgress.completed : 0}/{dataset.total_entries}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="space-y-2">
+                                    <div className="flex items-center justify-between text-sm">
+                                      <span className="text-gray-600 dark:text-gray-400">Progress</span>
+                                      <span className="font-medium text-gray-900 dark:text-white">
+                                        {getProgressForDataset(dataset.id)}%
+                                      </span>
+                                    </div>
+                                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                      <div 
+                                        className="bg-gradient-to-r from-blue-500 to-indigo-500 h-2 rounded-full" 
+                                        style={{ width: `${getProgressForDataset(dataset.id)}%` }}
+                                      ></div>
+                                    </div>
+                                  </div>
+                                  
+                                  {/* Labelers Progress Section */}
+                                  {labelersData && labelersData.users.length > 0 && (
+                                    <div className="border-t border-gray-200 dark:border-gray-700 pt-3 mt-2">
+                                      <div className="flex items-center justify-between mb-2">
+                                        <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center">
+                                          <FiUsers className="mr-1.5" size={14} /> Labelers Progress
+                                        </h4>
+                                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                                          {labelersData.users.length} {labelersData.users.length === 1 ? 'labeler' : 'labelers'}
+                                        </span>
+                                      </div>
+                                      <div className="space-y-2 max-h-32 overflow-y-auto pr-1">
+                                        {labelersData.users.map((labelerUser) => {
+                                          const labelerProgress = labelersData.progress.find(p => p.user_id === labelerUser.id);
+                                          const progressPercent = labelerProgress 
+                                            ? calculateProgress(labelerProgress.completed, labelerProgress.total)
+                                            : 0;
+                                          
+                                          return (
+                                            <div key={labelerUser.id} className="flex items-center justify-between text-xs">
+                                              <div className="flex items-center truncate">
+                                                <div className="bg-indigo-100 dark:bg-indigo-900/30 h-5 w-5 rounded-full flex items-center justify-center text-indigo-700 dark:text-indigo-300 mr-2 font-medium text-[10px]">
+                                                  {labelerUser.username.charAt(0).toUpperCase()}
+                                                </div>
+                                                <span className="text-gray-600 dark:text-gray-400 truncate">
+                                                  {labelerUser.username}
+                                                </span>
+                                              </div>
+                                              <div className="flex items-center">
+                                                <span className="text-gray-900 dark:text-white mr-2">
+                                                  {labelerProgress?.completed || 0}/{dataset.total_entries}
+                                                </span>
+                                                <div className="w-16 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+                                                  <div 
+                                                    className={`h-1.5 rounded-full ${
+                                                      progressPercent >= 80 ? 'bg-green-500' : 
+                                                      progressPercent >= 40 ? 'bg-blue-500' : 'bg-red-500'
+                                                    }`}
+                                                    style={{ width: `${progressPercent}%` }}
+                                                  ></div>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  )}
+                                  
+                                  <div className="flex gap-2 pt-1">
+                                    <Link href={`/datasets/${dataset.id}`} className="flex-1">
+                                      <Button className="w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 text-white shadow-md hover:shadow-lg transition-all cursor-pointer">
+                                        View Details <FiChevronRight className="ml-2" />
+                                      </Button>
+                                    </Link>
+                                    <Link href={`/labeling/${dataset.id}`} className="flex-1">
+                                      <Button className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-md hover:shadow-lg transition-all cursor-pointer">
+                                        Continue <FiTag className="ml-2" />
+                                      </Button>
+                                    </Link>
+                                  </div>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -333,29 +473,119 @@ export default function Dashboard() {
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {invitedDatasets
                           .filter(dataset => dataset.owner_id !== user.id)
-                          .map((dataset) => (
-                            <Card key={dataset.id} className="backdrop-blur-sm bg-white/80 dark:bg-gray-800/80 border border-white/20 dark:border-gray-700/50 shadow-lg hover:shadow-xl transition-all overflow-hidden">
-                              <div className="absolute top-0 left-0 h-1 w-full bg-gradient-to-r from-green-500 to-emerald-500"></div>
-                              <CardHeader>
-                                <div className="flex items-center gap-2 mb-1">
-                                  <CardTitle className="text-gray-900 dark:text-white font-bold">{dataset.name}</CardTitle>
-                                  <Badge variant="secondary">Joined</Badge>
-                                </div>
-                                <CardDescription className="text-gray-600 dark:text-gray-300">{dataset.description || 'No description'}</CardDescription>
-                              </CardHeader>
-                              <CardContent>
-                                <div className="flex items-center gap-2 mb-2">
-                                  <Badge variant="secondary">{dataset.total_entries} entries</Badge>
-                                  <Badge variant={getProgressForDataset(dataset.id) >= 80 ? "success" : getProgressForDataset(dataset.id) >= 40 ? "default" : "destructive"}>{getProgressForDataset(dataset.id)}% complete</Badge>
-                                </div>
-                                <Link href={`/labeling/${dataset.id}`}>
-                                  <Button className="w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 text-white shadow-md hover:shadow-lg transition-all mt-2">
-                                    Continue Labeling <FiChevronRight className="ml-2" />
-                                  </Button>
-                                </Link>
-                              </CardContent>
-                            </Card>
-                          ))}
+                          .map((dataset) => {
+                            const datasetProgress = progress.find((p: LabelProgress) => p.dataset_id === dataset.id);
+                            const labelersData = datasetLabelers[dataset.id];
+                            return (
+                              <Card key={dataset.id} className="backdrop-blur-sm bg-white/80 dark:bg-gray-800/80 border border-white/20 dark:border-gray-700/50 shadow-lg hover:shadow-xl transition-all overflow-hidden rounded-xl">
+                                <div className="absolute top-0 left-0 h-1.5 w-full bg-gradient-to-r from-green-500 to-emerald-500"></div>
+                                <CardHeader className="pb-3">
+                                  <div className="flex items-start justify-between gap-2 mb-2">
+                                    <CardTitle className="text-gray-900 dark:text-white font-bold text-lg">{dataset.name}</CardTitle>
+                                    <Badge variant="secondary" className="text-xs py-1 px-2">Joined</Badge>
+                                  </div>
+                                  <CardDescription className="text-gray-600 dark:text-gray-300 text-sm line-clamp-2 min-h-[2.5rem]">
+                                    {dataset.description || 'No description provided'}
+                                  </CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                  <div className="space-y-3">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-2">
+                                        <FiBox className="text-gray-500 dark:text-gray-400" />
+                                        <span className="text-sm text-gray-700 dark:text-gray-300">
+                                          {dataset.total_entries} entries
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <FiActivity className="text-gray-500 dark:text-gray-400" />
+                                        <span className="text-sm font-medium text-gray-900 dark:text-white">
+                                          {datasetProgress ? datasetProgress.completed : 0}/{dataset.total_entries}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    
+                                    <div className="space-y-2">
+                                      <div className="flex items-center justify-between text-sm">
+                                        <span className="text-gray-600 dark:text-gray-400">Progress</span>
+                                        <span className="font-medium text-gray-900 dark:text-white">
+                                          {getProgressForDataset(dataset.id)}%
+                                        </span>
+                                      </div>
+                                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                        <div 
+                                          className={`h-2 rounded-full ${getProgressForDataset(dataset.id) >= 80 ? 'bg-gradient-to-r from-green-500 to-emerald-500' : getProgressForDataset(dataset.id) >= 40 ? 'bg-gradient-to-r from-blue-500 to-indigo-500' : 'bg-gradient-to-r from-red-500 to-orange-500'}`}
+                                          style={{ width: `${getProgressForDataset(dataset.id)}%` }}
+                                        ></div>
+                                      </div>
+                                    </div>
+                                    
+                                    {/* Labelers Progress Section for joined datasets */}
+                                    {labelersData && labelersData.users.length > 0 && (
+                                      <div className="border-t border-gray-200 dark:border-gray-700 pt-3 mt-2">
+                                        <div className="flex items-center justify-between mb-2">
+                                          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center">
+                                            <FiUsers className="mr-1.5" size={14} /> Labelers Progress
+                                          </h4>
+                                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                                            {labelersData.users.length} {labelersData.users.length === 1 ? 'labeler' : 'labelers'}
+                                          </span>
+                                        </div>
+                                        <div className="space-y-2 max-h-32 overflow-y-auto pr-1">
+                                          {labelersData.users.map((labelerUser) => {
+                                            const labelerProgress = labelersData.progress.find(p => p.user_id === labelerUser.id);
+                                            const progressPercent = labelerProgress 
+                                              ? calculateProgress(labelerProgress.completed, labelerProgress.total)
+                                              : 0;
+                                            
+                                            return (
+                                              <div key={labelerUser.id} className="flex items-center justify-between text-xs">
+                                                <div className="flex items-center truncate">
+                                                  <div className="bg-indigo-100 dark:bg-indigo-900/30 h-5 w-5 rounded-full flex items-center justify-center text-indigo-700 dark:text-indigo-300 mr-2 font-medium text-[10px]">
+                                                    {labelerUser.username.charAt(0).toUpperCase()}
+                                                  </div>
+                                                  <span className="text-gray-600 dark:text-gray-400 truncate">
+                                                    {labelerUser.username}
+                                                  </span>
+                                                </div>
+                                                <div className="flex items-center">
+                                                  <span className="text-gray-900 dark:text-white mr-2">
+                                                    {labelerProgress?.completed || 0}/{dataset.total_entries}
+                                                  </span>
+                                                  <div className="w-16 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+                                                    <div 
+                                                      className={`h-1.5 rounded-full ${
+                                                        progressPercent >= 80 ? 'bg-green-500' : 
+                                                        progressPercent >= 40 ? 'bg-blue-500' : 'bg-red-500'
+                                                      }`}
+                                                      style={{ width: `${progressPercent}%` }}
+                                                    ></div>
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    )}
+                                    
+                                    <div className="flex gap-2 pt-1">
+                                      <Link href={`/datasets/${dataset.id}`} className="flex-1">
+                                        <Button className="w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 text-white shadow-md hover:shadow-lg transition-all cursor-pointer">
+                                          View Details <FiChevronRight className="ml-2" />
+                                        </Button>
+                                      </Link>
+                                      <Link href={`/labeling/${dataset.id}`} className="flex-1">
+                                        <Button className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-md hover:shadow-lg transition-all cursor-pointer">
+                                          Continue <FiTag className="ml-2" />
+                                        </Button>
+                                      </Link>
+                                    </div>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            );
+                          })}
                       </div>
                     )}
                   </div>
@@ -367,4 +597,4 @@ export default function Dashboard() {
       </motion.div>
     </div>
   );
-} 
+}

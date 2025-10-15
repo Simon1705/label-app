@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Button } from '@/components/ui/Button';
 import { toast } from 'react-hot-toast';
 import { calculateProgress, cn } from '@/lib/utils';
-import { FiArrowRight, FiArrowLeft, FiCheck, FiX, FiMinus, FiStar, FiLoader, FiAlertCircle, FiHome, FiArrowUp, FiBarChart, FiDatabase, FiChevronsLeft, FiChevronsRight, FiChevronDown } from 'react-icons/fi';
+import { FiArrowRight, FiArrowLeft, FiCheck, FiX, FiMinus, FiStar, FiLoader, FiAlertCircle, FiHome, FiArrowUp, FiBarChart, FiDatabase, FiChevronsLeft, FiChevronsRight, FiChevronDown, FiFilter } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // Local Skeleton component
@@ -41,6 +41,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [progress, setProgress] = useState({ completed: 0, total: 0, start_date: null as string | null });
+  const [filteredTotal, setFilteredTotal] = useState(0); // Total count with active filters
   const [entriesPerPage, setEntriesPerPage] = useState(10);
   const [completedEntries, setCompletedEntries] = useState<Set<string>>(new Set());
   const [previousLabels, setPreviousLabels] = useState<Record<string, LabelOption>>({});
@@ -48,6 +49,9 @@ export default function LabelingClient({ id }: LabelingClientProps) {
   const [debugMode, setDebugMode] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [entryOriginalOrder, setEntryOriginalOrder] = useState<Record<string, number>>({});
+  const [scoreFilters, setScoreFilters] = useState<('all' | '1' | '2' | '3' | '4' | '5')[]>(['all']);
+  const [pendingScoreFilters, setPendingScoreFilters] = useState<('all' | '1' | '2' | '3' | '4' | '5')[]>(['all']);
+  const [hasScoreColumn, setHasScoreColumn] = useState<boolean>(true); // Default to true, will be updated when dataset is loaded
   
   // Completely rewritten fetchDatasetAndEntries function
   const fetchDatasetAndEntries = useCallback(async () => {
@@ -132,12 +136,32 @@ export default function LabelingClient({ id }: LabelingClientProps) {
         progressRecord = data;
       }
       
+      // Check if dataset has score column by checking if any entries have score data
+      const { data: sampleEntries, error: sampleError } = await supabase
+        .from('dataset_entries')
+        .select('score')
+        .eq('dataset_id', id)
+        .limit(5); // Check first 5 entries
+      
+      if (!sampleError && sampleEntries) {
+        // If any entry has a non-null score, dataset has score column
+        const hasScore = sampleEntries.some(entry => entry.score !== null);
+        setHasScoreColumn(hasScore);
+        
+        // If no score column, disable filters by setting them to 'all'
+        if (!hasScore) {
+          setScoreFilters(['all']);
+          setPendingScoreFilters(['all']);
+        }
+      }
+      
       setDataset(datasetData);
       setProgress({
         completed: progressRecord?.completed || 0,
         total: progressRecord?.total || 0,
         start_date: progressRecord?.start_date || null
       });
+      setFilteredTotal(progressRecord?.total || 0);
       
       // Determine which page to load - use last_page if available, otherwise start from 0
       const lastPage = progressRecord?.last_page || 0;
@@ -150,7 +174,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       }
       
       // Fetch entries for the last page the user was on
-      await loadPageEntries(lastPage, entriesPerPage);
+      await loadPageEntries(lastPage, entriesPerPage, scoreFilters);
       
       console.log('✅ Initial fetch complete');
     } catch (error) {
@@ -168,7 +192,8 @@ export default function LabelingClient({ id }: LabelingClientProps) {
   }, [user, id, fetchDatasetAndEntries]);
   
   // Fix the loadPageEntries function to handle large page sizes correctly
-  const loadPageEntries = async (pageIndex: number, pageSize: number) => {
+  const loadPageEntries = async (pageIndex: number, pageSize: number, filtersToUse?: ('all' | '1' | '2' | '3' | '4' | '5')[]) => {
+    const currentFilters = filtersToUse || scoreFilters;
     try {
       console.log(`⏳ Loading page ${pageIndex + 1} with size ${pageSize}...`);
       
@@ -190,13 +215,26 @@ export default function LabelingClient({ id }: LabelingClientProps) {
         try {
           console.log("Fetching all entry IDs to establish original order...");
           
-          // Simplified query that just gets all entries in a consistent order
-          // Removed created_at sorting which might cause errors
-          const { data: allEntryIds, error: idsError } = await supabase
+          // Build query with score filters
+          let query = supabase
             .from('dataset_entries')
             .select('id')
-            .eq('dataset_id', id)
-            .order('id');
+            .eq('dataset_id', id);
+          
+          // Apply score filters only if dataset has score column
+          if (hasScoreColumn && !currentFilters.includes('all') && currentFilters.length > 0) {
+            // If multiple scores are selected, use 'in' operator
+            if (currentFilters.length > 1) {
+              query = query.in('score', currentFilters.map(s => parseInt(s)));
+            } else {
+              // If only one score is selected, use 'eq' operator
+              query = query.eq('score', parseInt(currentFilters[0]));
+            }
+          }
+          
+          query = query.order('id');
+          
+          const { data: allEntryIds, error: idsError } = await query;
             
           if (idsError) {
             console.error("Error fetching all entry IDs:", idsError);
@@ -220,10 +258,23 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       }
       
       // Fetch total entries count to validate we're not requesting beyond the dataset size
-      const { count: totalCount, error: countError } = await supabase
+      let countQuery = supabase
         .from('dataset_entries')
         .select('*', { count: 'exact', head: true })
         .eq('dataset_id', id);
+      
+      // Apply score filters only if dataset has score column
+      if (hasScoreColumn && !currentFilters.includes('all') && currentFilters.length > 0) {
+        // If multiple scores are selected, use 'in' operator
+        if (currentFilters.length > 1) {
+          countQuery = countQuery.in('score', currentFilters.map(s => parseInt(s)));
+        } else {
+          // If only one score is selected, use 'eq' operator
+          countQuery = countQuery.eq('score', parseInt(currentFilters[0]));
+        }
+      }
+      
+      const { count: totalCount, error: countError } = await countQuery;
       
       if (countError) {
         console.error("Error counting entries:", countError);
@@ -239,12 +290,23 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       if (totalCount && start >= totalCount) {
         console.warn(`Start index ${start} is beyond total entries ${totalCount}`);
         // Reset to first page in case of invalid range
-        const { data: firstPageData, error: firstPageError } = await supabase
+        let firstPageQuery = supabase
           .from('dataset_entries')
           .select('*')
-          .eq('dataset_id', id)
-          .order('id')
-          .range(0, pageSize - 1);
+          .eq('dataset_id', id);
+        
+        // Apply score filters only if dataset has score column
+        if (hasScoreColumn && !currentFilters.includes('all') && currentFilters.length > 0) {
+          if (currentFilters.length > 1) {
+            firstPageQuery = firstPageQuery.in('score', currentFilters.map(s => parseInt(s)));
+          } else {
+            firstPageQuery = firstPageQuery.eq('score', parseInt(currentFilters[0]));
+          }
+        }
+        
+        firstPageQuery = firstPageQuery.order('id').range(0, pageSize - 1);
+        
+        const { data: firstPageData, error: firstPageError } = await firstPageQuery;
         
         if (firstPageError) {
           console.error("Error fetching first page:", firstPageError);
@@ -264,13 +326,24 @@ export default function LabelingClient({ id }: LabelingClientProps) {
         }
       }
       
-      // Fetch entries for this specific page with simpler query
-      const { data: entriesData, error: entriesError } = await supabase
+      // Fetch entries for this specific page with score filters
+      let entriesQuery = supabase
         .from('dataset_entries')
         .select('*')
-        .eq('dataset_id', id)
-        .order('id') // Basic ordering to ensure consistency
-        .range(start, validEnd);
+        .eq('dataset_id', id);
+      
+      // Apply score filters only if dataset has score column
+      if (hasScoreColumn && !currentFilters.includes('all') && currentFilters.length > 0) {
+        if (currentFilters.length > 1) {
+          entriesQuery = entriesQuery.in('score', currentFilters.map(s => parseInt(s)));
+        } else {
+          entriesQuery = entriesQuery.eq('score', parseInt(currentFilters[0]));
+        }
+      }
+      
+      entriesQuery = entriesQuery.order('id').range(start, validEnd);
+      
+      const { data: entriesData, error: entriesError } = await entriesQuery;
       
       if (entriesError) {
         console.error("❌ Error fetching entries:", entriesError);
@@ -281,12 +354,23 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       if (!entriesData || entriesData.length === 0) {
         console.log("No entries found for this page");
         // Try to recover by loading the first page
-        const { data: firstPageData, error: firstPageError } = await supabase
+        let firstPageQuery = supabase
           .from('dataset_entries')
           .select('*')
-          .eq('dataset_id', id)
-          .order('id')
-          .range(0, pageSize - 1);
+          .eq('dataset_id', id);
+        
+        // Apply score filters only if dataset has score column
+        if (hasScoreColumn && !currentFilters.includes('all') && currentFilters.length > 0) {
+          if (currentFilters.length > 1) {
+            firstPageQuery = firstPageQuery.in('score', currentFilters.map(s => parseInt(s)));
+          } else {
+            firstPageQuery = firstPageQuery.eq('score', parseInt(currentFilters[0]));
+          }
+        }
+        
+        firstPageQuery = firstPageQuery.order('id').range(0, pageSize - 1);
+        
+        const { data: firstPageData, error: firstPageError } = await firstPageQuery;
         
         if (firstPageError) {
           console.error("Error fetching first page:", firstPageError);
@@ -350,12 +434,23 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       
       // Last resort recovery - load first page with a smaller size
       try {
-        const { data: recoveryData } = await supabase
+        let recoveryQuery = supabase
           .from('dataset_entries')
           .select('*')
-          .eq('dataset_id', id)
-          .order('id')
-          .range(0, 9); // First 10 entries
+          .eq('dataset_id', id);
+        
+        // Apply score filters only if dataset has score column
+        if (hasScoreColumn && !currentFilters.includes('all') && currentFilters.length > 0) {
+          if (currentFilters.length > 1) {
+            recoveryQuery = recoveryQuery.in('score', currentFilters.map(s => parseInt(s)));
+          } else {
+            recoveryQuery = recoveryQuery.eq('score', parseInt(currentFilters[0]));
+          }
+        }
+        
+        recoveryQuery = recoveryQuery.order('id').range(0, 9); // First 10 entries
+        
+        const { data: recoveryData } = await recoveryQuery;
           
         if (recoveryData && recoveryData.length > 0) {
           console.log('✅ Emergency recovery with 10 entries successful');
@@ -426,11 +521,11 @@ export default function LabelingClient({ id }: LabelingClientProps) {
   function handlePageSelect(pageNum: number) {
     if (pageNum === -1) return; // Skip separators
     const newIndex = (pageNum - 1) * entriesPerPage;
-    if (newIndex >= 0 && newIndex < progress.total) {
+    if (newIndex >= 0 && newIndex < filteredTotal) {
       if (newIndex === currentIndex) return;
       
       setLoading(true);
-      loadPageEntries(pageNum - 1, entriesPerPage).then(() => {
+      loadPageEntries(pageNum - 1, entriesPerPage, scoreFilters).then(() => {
         setCurrentIndex(newIndex);
         setSelectedLabels({});
         // Save the current page to the database
@@ -441,6 +536,56 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       });
     }
   }
+  
+  // Function to reset pagination when filter changes
+  const resetFilter = async (newFilters?: ('all' | '1' | '2' | '3' | '4' | '5')[]) => {
+    const filtersToUse = newFilters || scoreFilters;
+    console.log(`⏳ Resetting filters to: ${filtersToUse.join(', ')}`);
+    setLoading(true);
+    setSelectedLabels({});
+    
+    // Count total entries with current filters
+    let countQuery = supabase
+      .from('dataset_entries')
+      .select('*', { count: 'exact', head: true })
+      .eq('dataset_id', id);
+    
+    // Apply score filters only if dataset has score column
+    if (hasScoreColumn && !filtersToUse.includes('all') && filtersToUse.length > 0) {
+      // If multiple scores are selected, use 'in' operator
+      if (filtersToUse.length > 1) {
+        countQuery = countQuery.in('score', filtersToUse.map(s => parseInt(s)));
+      } else {
+        // If only one score is selected, use 'eq' operator
+        countQuery = countQuery.eq('score', parseInt(filtersToUse[0]));
+      }
+    }
+    
+    const { count: totalCount, error: countError } = await countQuery;
+    
+    if (countError) {
+      console.error("Error counting filtered entries:", countError);
+      toast.error("Error updating filter");
+      setLoading(false);
+      return;
+    }
+    
+    // Update filtered total for pagination
+    setFilteredTotal(totalCount || 0);
+    
+    // Reset current index if it's beyond the new total
+    const newTotal = totalCount || 0;
+    if (currentIndex >= newTotal && newTotal > 0) {
+      setCurrentIndex(0);
+    }
+    
+    // Load first page with new filter
+    const currentPage = Math.floor(currentIndex / entriesPerPage);
+    await loadPageEntries(currentPage, entriesPerPage, filtersToUse);
+    // Update last page to current page in database
+    await updateLastPage(currentPage);
+    setLoading(false);
+  };
   
   // Add function to update the last page in the database
   const updateLastPage = async (pageIndex: number) => {
@@ -468,13 +613,21 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       const nextIndex = currentIndex + entriesPerPage;
       const nextPage = Math.floor(nextIndex / entriesPerPage);
       
+      // Check if next page exists
+      const totalPages = Math.ceil(filteredTotal / entriesPerPage);
+      if (nextPage >= totalPages) {
+        console.log('No more pages available');
+        setLoading(false);
+        return;
+      }
+      
       console.log(`⏳ Navigating to next page: ${nextPage + 1}`);
       
       // Clear selections first
       setSelectedLabels({});
       
       // Load this page data
-      await loadPageEntries(nextPage, entriesPerPage);
+      await loadPageEntries(nextPage, entriesPerPage, scoreFilters);
       
       // Now update the current index
       setCurrentIndex(nextIndex);
@@ -503,7 +656,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       const prevPage = Math.floor(prevIndex / entriesPerPage);
       
       // Load the previous page data
-      loadPageEntries(prevPage, entriesPerPage).then(() => {
+      loadPageEntries(prevPage, entriesPerPage, scoreFilters).then(() => {
         // Update current index
         setCurrentIndex(prevIndex);
         
@@ -667,7 +820,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
 
       // Reload the current page to sync with the database
       const pageNumber = Math.floor(currentIndex / entriesPerPage);
-      await loadPageEntries(pageNumber, entriesPerPage);
+      await loadPageEntries(pageNumber, entriesPerPage, scoreFilters);
       
       // Clear selected labels after successful submission
       setSelectedLabels({});
@@ -715,7 +868,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
     setCurrentIndex(0);
     
     // Load first page with new size directly
-    loadPageEntries(0, count)
+    loadPageEntries(0, count, scoreFilters)
       .then(() => {
         console.log(`✅ Successfully changed to ${count} entries per page`);
         // Update last page to 0 in database
@@ -863,8 +1016,13 @@ export default function LabelingClient({ id }: LabelingClientProps) {
   
   // Helper function to generate pagination range with ellipsis
   function getPaginationRange() {
-    const totalPages = Math.ceil(progress.total / entriesPerPage);
+    const totalPages = Math.ceil(filteredTotal / entriesPerPage);
     const currentPage = Math.floor(currentIndex / entriesPerPage) + 1;
+    
+    // If no pages, return empty array
+    if (totalPages <= 0) {
+      return [];
+    }
     
     // If 7 or fewer pages, show all pages
     if (totalPages <= 7) {
@@ -962,9 +1120,11 @@ export default function LabelingClient({ id }: LabelingClientProps) {
           <div className="w-16 h-16 mx-auto mb-6 flex items-center justify-center text-blue-500 bg-blue-100 dark:bg-blue-900/30 rounded-full">
             <FiDatabase size={32} />
           </div>
-          <h3 className="text-xl font-medium text-gray-900 dark:text-white mb-2">No Entries on This Page</h3>
+          <h3 className="text-xl font-medium text-gray-900 dark:text-white mb-2">No Entries Found</h3>
           <p className="text-gray-500 dark:text-gray-400 mb-6">
-            There are no entries to display on the current page. Try navigating to a different page.
+            {progress.total === 0 
+              ? "No entries match your current filter settings. Try adjusting your filters."
+              : "There are no entries to display on the current page. Try navigating to a different page."}
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <Button 
@@ -973,14 +1133,16 @@ export default function LabelingClient({ id }: LabelingClientProps) {
             >
               <FiHome className="mr-2" /> Back to Dashboard
             </Button>
-          <Button
-            variant="outline"
-            onClick={handlePrevious}
-            disabled={currentIndex === 0}
-              className="w-full sm:w-auto flex items-center justify-center"
-          >
-              <FiArrowLeft className="mr-2" /> Previous Page
-          </Button>
+            {progress.total > 0 && (
+              <Button
+                variant="outline"
+                onClick={handlePrevious}
+                disabled={currentIndex === 0}
+                className="w-full sm:w-auto flex items-center justify-center"
+              >
+                <FiArrowLeft className="mr-2" /> Previous Page
+              </Button>
+            )}
             {/* Add debug toggle button */}
             <Button
               variant="outline"
@@ -988,16 +1150,16 @@ export default function LabelingClient({ id }: LabelingClientProps) {
               className="w-full sm:w-auto flex items-center justify-center"
             >
               Toggle Debug
-          </Button>
+            </Button>
+          </div>
         </div>
-      </div>
       </motion.div>
     );
   }
   
   const currentEntry = entries[currentIndex];
   const progressPercent = calculateProgress(progress.completed, progress.total);
-  const isEntryLabeled = completedEntries.has(currentEntry.id);
+  const isEntryLabeled = currentEntry ? completedEntries.has(currentEntry.id) : false;
   
   return (
     <div className="max-w-6xl mx-auto">
@@ -1076,7 +1238,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
               </div>
               <div className="ml-2">
                 <div className="text-sm text-gray-500 dark:text-gray-400">Page</div>
-                <div className="font-medium">{Math.floor(currentIndex / entriesPerPage) + 1} of {Math.ceil(progress.total / entriesPerPage)}</div>
+                <div className="font-medium">{Math.floor(currentIndex / entriesPerPage) + 1} of {Math.ceil(filteredTotal / entriesPerPage)}</div>
               </div>
             </div>
             
@@ -1087,6 +1249,77 @@ export default function LabelingClient({ id }: LabelingClientProps) {
               <div className="ml-2">
                 <div className="text-sm text-gray-500 dark:text-gray-400">Labeled</div>
                 <div className="font-medium">{completedEntries.size} entries</div>
+              </div>
+            </div>
+            
+            {/* Score Filter */}
+            <div className="flex items-center">
+              <div className="w-10 h-10 rounded-full flex items-center justify-center bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400">
+                <FiFilter className="text-xl" />
+              </div>
+              <div className="ml-2 relative">
+                <div className="text-sm text-gray-500 dark:text-gray-400">Filter</div>
+                {hasScoreColumn ? (
+                  <div className="flex flex-wrap gap-1 items-center">
+                    {(['all', '1', '2', '3', '4', '5'] as const).map(score => (
+                      <label key={score} className="flex items-center gap-1 text-xs">
+                        <input
+                          type="checkbox"
+                          checked={pendingScoreFilters.includes(score)}
+                          onChange={(e) => {
+                            let newFilters: ('all' | '1' | '2' | '3' | '4' | '5')[] = [...pendingScoreFilters];
+                            if (e.target.checked) {
+                              // If 'all' is selected, clear other filters
+                              if (score === 'all') {
+                                newFilters = ['all'];
+                              } else {
+                                // Remove 'all' if selecting specific scores
+                                const filtered = newFilters.filter(f => f !== 'all');
+                                newFilters = [...filtered, score];
+                                // If all specific scores are selected, switch to 'all'
+                                if (newFilters.length === 5) {
+                                  newFilters = ['all'];
+                                }
+                              }
+                            } else {
+                              // If unchecking 'all', select all specific scores
+                              if (score === 'all') {
+                                newFilters = ['1', '2', '3', '4', '5'];
+                              } else {
+                                // Remove the unchecked score
+                                newFilters = newFilters.filter(f => f !== score);
+                                // If no filters left, select 'all'
+                                if (newFilters.length === 0) {
+                                  newFilters = ['all'];
+                                }
+                              }
+                            }
+                            setPendingScoreFilters(newFilters);
+                          }}
+                          className="rounded text-purple-600 focus:ring-purple-500"
+                        />
+                        <span className="font-medium">
+                          {score === 'all' ? 'All' : `Score ${score}`}
+                        </span>
+                      </label>
+                    ))}
+                    <Button
+                      onClick={() => {
+                        const newFilters = [...pendingScoreFilters];
+                        setScoreFilters(newFilters);
+                        resetFilter(newFilters);
+                      }}
+                      className="ml-2 px-2 py-1 text-xs"
+                      variant="outline"
+                    >
+                      Apply
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="text-xs text-gray-500 dark:text-gray-400 italic">
+                    No score column in dataset
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1287,7 +1520,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
         <Button
           variant="outline"
           onClick={handlePrevious}
-          disabled={currentIndex === 0}
+          disabled={progress.total <= 0 || currentIndex === 0}
               className="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-750"
         >
               <FiArrowLeft className="mr-2" /> Previous
@@ -1299,7 +1532,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
                 variant="ghost"
                 size="sm"
                 onClick={() => setCurrentIndex(0)}
-                disabled={currentIndex === 0}
+                disabled={progress.total <= 0 || currentIndex === 0}
                 className="px-2"
               >
                 <FiChevronsLeft />
@@ -1330,8 +1563,8 @@ export default function LabelingClient({ id }: LabelingClientProps) {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setCurrentIndex(Math.floor((progress.total - 1) / entriesPerPage) * entriesPerPage)}
-                disabled={currentIndex + entriesPerPage >= progress.total}
+                onClick={() => setCurrentIndex(Math.floor((filteredTotal - 1) / entriesPerPage) * entriesPerPage)}
+                disabled={filteredTotal <= 0 || currentIndex + entriesPerPage >= filteredTotal}
                 className="px-2"
               >
                 <FiChevronsRight />
@@ -1341,7 +1574,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
         <Button
           variant="outline"
           onClick={handleNext}
-              disabled={currentIndex + entriesPerPage >= progress.total}
+              disabled={filteredTotal <= 0 || currentIndex + entriesPerPage >= filteredTotal}
               className="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-750"
         >
               Next <FiArrowRight className="ml-2" />

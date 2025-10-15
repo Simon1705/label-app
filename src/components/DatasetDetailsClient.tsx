@@ -47,6 +47,23 @@ export default function DatasetDetailsClient({ id }: DatasetDetailsClientProps) 
   const [showExportOptions, setShowExportOptions] = useState(false);
   const [exportFormat, setExportFormat] = useState<'text' | 'numeric'>('text');
   
+  const checkUserJoinedDataset = useCallback(async (datasetId: string, userId: string | undefined) => {
+    if (!userId) return false;
+    
+    try {
+      const { data, error } = await supabase
+        .from('label_progress')
+        .select('id')
+        .eq('dataset_id', datasetId)
+        .eq('user_id', userId)
+        .single();
+      
+      return !!data; // Returns true if data exists, false otherwise
+    } catch (error) {
+      return false; // Return false on error
+    }
+  }, []);
+  
   const checkAdminStatus = useCallback(async () => {
     try {
       const { data, error } = await supabase
@@ -75,7 +92,12 @@ export default function DatasetDetailsClient({ id }: DatasetDetailsClientProps) 
         .single();
       
       if (datasetError) throw datasetError;
-      if (datasetData.owner_id !== user?.id && !isAdmin) {
+      
+      // Check if user is owner, admin, or has joined the dataset
+      const isOwner = datasetData.owner_id === user?.id;
+      const isJoinedUser = await checkUserJoinedDataset(id, user?.id);
+      
+      if (!isOwner && !isAdmin && !isJoinedUser) {
         toast.error('You do not have permission to view this dataset');
         router.push('/datasets');
         return;
@@ -154,7 +176,7 @@ export default function DatasetDetailsClient({ id }: DatasetDetailsClientProps) 
     } finally {
       setLoading(false);
     }
-  }, [id, user?.id, isAdmin, router]);
+  }, [id, user?.id, isAdmin, router, checkUserJoinedDataset]);
 
   useEffect(() => {
     if (user) {
@@ -213,11 +235,61 @@ export default function DatasetDetailsClient({ id }: DatasetDetailsClientProps) 
     try {
       setExportLoading(true);
       
-      const { data: entries, error: entriesError } = await supabase.from('dataset_entries').select('*').eq('dataset_id', id);
-      if (entriesError) throw entriesError;
+      // Fetch all entries with pagination
+      const entries: any[] = [];
+      let continueFetchingEntries = true;
+      let offsetEntries = 0;
+      const limitEntries = 1000;
       
-      const { data: labels, error: labelsError } = await supabase.from('dataset_labels').select('*').eq('dataset_id', id);
-      if (labelsError) throw labelsError;
+      while (continueFetchingEntries) {
+        const { data: batch, error: entriesError } = await supabase
+          .from('dataset_entries')
+          .select('*')
+          .eq('dataset_id', id)
+          .range(offsetEntries, offsetEntries + limitEntries - 1);
+        
+        if (entriesError) throw entriesError;
+        
+        if (batch && batch.length > 0) {
+          entries.push(...batch);
+          // If we got less than the limit, we've fetched all entries
+          if (batch.length < limitEntries) {
+            continueFetchingEntries = false;
+          } else {
+            offsetEntries += limitEntries;
+          }
+        } else {
+          continueFetchingEntries = false;
+        }
+      }
+      
+      // Fetch all labels with pagination
+      const labels: any[] = [];
+      let continueFetchingLabels = true;
+      let offsetLabels = 0;
+      const limitLabels = 1000;
+      
+      while (continueFetchingLabels) {
+        const { data: batch, error: labelsError } = await supabase
+          .from('dataset_labels')
+          .select('*')
+          .eq('dataset_id', id)
+          .range(offsetLabels, offsetLabels + limitLabels - 1);
+        
+        if (labelsError) throw labelsError;
+        
+        if (batch && batch.length > 0) {
+          labels.push(...batch);
+          // If we got less than the limit, we've fetched all labels
+          if (batch.length < limitLabels) {
+            continueFetchingLabels = false;
+          } else {
+            offsetLabels += limitLabels;
+          }
+        } else {
+          continueFetchingLabels = false;
+        }
+      }
       
       const userIds = [...new Set(labels?.map(l => l.user_id) || [])];
       let usersData: Record<string, User> = {};
@@ -231,12 +303,13 @@ export default function DatasetDetailsClient({ id }: DatasetDetailsClientProps) 
         }, {});
       }
       
-      const csvRows = entries?.map(entry => {
-        const entryLabels = labels?.filter(l => l.entry_id === entry.id) || [];
+      const csvRows = entries?.map((entry, index) => {
+        const entryLabels = labels.filter(l => l.entry_id === entry.id) || [];
         const row: Record<string, any> = { text: entry.text, score: entry.score };
         const labelValues = new Set<string>();
         
-        entryLabels.forEach(label => {
+        // Add individual labeler columns
+        entryLabels.forEach((label, labelIndex) => {
           const username = usersData[label.user_id]?.username || 'unknown';
           if (exportFormat === 'numeric') {
             let numericLabel: number;
@@ -253,6 +326,8 @@ export default function DatasetDetailsClient({ id }: DatasetDetailsClientProps) 
             labelValues.add(String(label.label));
           }
         });
+        
+        // Individual labeler columns are already added above
         
         if (entryLabels.length > 1) {
           row['consensus'] = labelValues.size === 1 ? 'YES' : 'NO';
@@ -278,7 +353,39 @@ export default function DatasetDetailsClient({ id }: DatasetDetailsClientProps) 
         return row;
       });
       
-      const headers = csvRows && csvRows.length > 0 ? Object.keys(csvRows[0]) : [];
+      // Create headers in a specific order to ensure consistency
+      let headers: string[] = [];
+      if (csvRows && csvRows.length > 0) {
+        // Start with required columns
+        headers = ['text', 'score'];
+        
+        // Collect all label columns from all rows (in case different rows have different labelers)
+        const allLabelColumns = new Set<string>();
+        csvRows.forEach(row => {
+          Object.keys(row).forEach(key => {
+            if (key.startsWith('label_')) {
+              allLabelColumns.add(key);
+            }
+          });
+        });
+        const labelColumns = Array.from(allLabelColumns).sort();
+        headers.push(...labelColumns);
+        
+        // Add consensus columns
+        headers.push('consensus', 'agreement_percentage', 'majority_label');
+        
+        // Add any remaining columns
+        const remainingColumns = Object.keys(csvRows[0]).filter(key => 
+          !headers.includes(key) && 
+          key !== 'text' && 
+          key !== 'score' && 
+          !key.startsWith('label_') && 
+          key !== 'consensus' && 
+          key !== 'agreement_percentage' && 
+          key !== 'majority_label'
+        );
+        headers.push(...remainingColumns);
+      }
       const csvContent = [
         headers.join(','),
         ...csvRows?.map(row => 
