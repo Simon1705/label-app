@@ -413,13 +413,32 @@ export default function Dashboard() {
                                             ? calculateProgress(labelerProgress.completed, labelerProgress.total)
                                             : 0;
                                           
+                                          // Check if this is the current user
+                                          const isCurrentUser = labelerUser.id === user?.id;
+                                          
                                           return (
-                                            <div key={labelerUser.id} className="flex items-center justify-between text-xs">
+                                            <div 
+                                              key={labelerUser.id} 
+                                              className={cn(
+                                                "flex items-center justify-between text-xs p-1.5 rounded",
+                                                isCurrentUser && "bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800"
+                                              )}
+                                            >
                                               <div className="flex items-center truncate">
-                                                <div className="bg-indigo-100 dark:bg-indigo-900/30 h-5 w-5 rounded-full flex items-center justify-center text-indigo-700 dark:text-indigo-300 mr-2 font-medium text-[10px]">
+                                                <div className={cn(
+                                                  "h-5 w-5 rounded-full flex items-center justify-center font-medium text-[10px] mr-2",
+                                                  isCurrentUser 
+                                                    ? "bg-indigo-500 text-white border border-indigo-600" 
+                                                    : "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-600"
+                                                )}>
                                                   {labelerUser.username.charAt(0).toUpperCase()}
                                                 </div>
-                                                <span className="text-gray-600 dark:text-gray-400 truncate">
+                                                <span className={cn(
+                                                  "truncate",
+                                                  isCurrentUser 
+                                                    ? "font-medium text-indigo-700 dark:text-indigo-200" 
+                                                    : "text-gray-600 dark:text-gray-400"
+                                                )}>
                                                   {labelerUser.username}
                                                 </span>
                                               </div>
@@ -427,7 +446,7 @@ export default function Dashboard() {
                                                 <span className="text-gray-900 dark:text-white mr-2">
                                                   {labelerProgress?.completed || 0}/{dataset.total_entries}
                                                 </span>
-                                                <div className="w-16 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+                                                <div className="w-16 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mr-2">
                                                   <div 
                                                     className={`h-1.5 rounded-full ${
                                                       progressPercent >= 80 ? 'bg-green-500' : 
@@ -436,6 +455,9 @@ export default function Dashboard() {
                                                     style={{ width: `${progressPercent}%` }}
                                                   ></div>
                                                 </div>
+                                                <span className="text-gray-900 dark:text-white w-8 text-right">
+                                                  {progressPercent}%
+                                                </span>
                                               </div>
                                             </div>
                                           );
@@ -538,13 +560,32 @@ export default function Dashboard() {
                                               ? calculateProgress(labelerProgress.completed, labelerProgress.total)
                                               : 0;
                                             
+                                            // Check if this is the current user
+                                            const isCurrentUser = labelerUser.id === user?.id;
+                                            
                                             return (
-                                              <div key={labelerUser.id} className="flex items-center justify-between text-xs">
+                                              <div 
+                                                key={labelerUser.id} 
+                                                className={cn(
+                                                  "flex items-center justify-between text-xs p-1.5 rounded",
+                                                  isCurrentUser && "bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800"
+                                                )}
+                                              >
                                                 <div className="flex items-center truncate">
-                                                  <div className="bg-indigo-100 dark:bg-indigo-900/30 h-5 w-5 rounded-full flex items-center justify-center text-indigo-700 dark:text-indigo-300 mr-2 font-medium text-[10px]">
+                                                  <div className={cn(
+                                                    "h-5 w-5 rounded-full flex items-center justify-center font-medium text-[10px] mr-2",
+                                                    isCurrentUser 
+                                                      ? "bg-indigo-500 text-white border border-indigo-600" 
+                                                      : "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-600"
+                                                  )}>
                                                     {labelerUser.username.charAt(0).toUpperCase()}
                                                   </div>
-                                                  <span className="text-gray-600 dark:text-gray-400 truncate">
+                                                  <span className={cn(
+                                                    "truncate",
+                                                    isCurrentUser 
+                                                      ? "font-medium text-indigo-700 dark:text-indigo-200" 
+                                                      : "text-gray-600 dark:text-gray-400"
+                                                  )}>
                                                     {labelerUser.username}
                                                   </span>
                                                 </div>
@@ -552,7 +593,7 @@ export default function Dashboard() {
                                                   <span className="text-gray-900 dark:text-white mr-2">
                                                     {labelerProgress?.completed || 0}/{dataset.total_entries}
                                                   </span>
-                                                  <div className="w-16 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+                                                  <div className="w-16 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mr-2">
                                                     <div 
                                                       className={`h-1.5 rounded-full ${
                                                         progressPercent >= 80 ? 'bg-green-500' : 
@@ -561,6 +602,9 @@ export default function Dashboard() {
                                                       style={{ width: `${progressPercent}%` }}
                                                     ></div>
                                                   </div>
+                                                  <span className="text-gray-900 dark:text-white w-8 text-right">
+                                                    {progressPercent}%
+                                                  </span>
                                                 </div>
                                               </div>
                                             );
