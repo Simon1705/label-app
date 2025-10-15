@@ -14,6 +14,7 @@ Aplikasi web untuk memudahkan labeling dataset berupa ulasan dari suatu aplikasi
 ### Admin
 - Mengelola user (CRUD)
 - Melihat dataset yang diupload oleh user
+- Mengatur status dataset (aktif/non-aktif)
 
 ## Teknologi
 
@@ -50,7 +51,8 @@ CREATE TABLE datasets (
   owner_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   total_entries INTEGER NOT NULL,
-  invite_code TEXT NOT NULL
+  invite_code TEXT NOT NULL,
+  is_active BOOLEAN DEFAULT TRUE
 );
 
 CREATE TABLE dataset_entries (

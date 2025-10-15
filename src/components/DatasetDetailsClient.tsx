@@ -508,9 +508,14 @@ export default function DatasetDetailsClient({ id }: DatasetDetailsClientProps) 
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.5, delay: 0.2 }}
-              className="text-3xl font-bold"
+              className="text-3xl font-bold flex items-center gap-2"
             >
               {dataset.name}
+              {dataset.is_active === false && (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200">
+                  Inactive
+                </span>
+              )}
             </motion.h1>
             <div className="flex items-center mt-2">
               <FiCalendar className="mr-2 opacity-70" />

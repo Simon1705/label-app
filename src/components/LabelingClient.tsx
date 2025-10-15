@@ -52,6 +52,25 @@ export default function LabelingClient({ id }: LabelingClientProps) {
   const [scoreFilters, setScoreFilters] = useState<('all' | '1' | '2' | '3' | '4' | '5')[]>(['all']);
   const [pendingScoreFilters, setPendingScoreFilters] = useState<('all' | '1' | '2' | '3' | '4' | '5')[]>(['all']);
   const [hasScoreColumn, setHasScoreColumn] = useState<boolean>(true); // Default to true, will be updated when dataset is loaded
+  const [isAdmin, setIsAdmin] = useState(false); // Add isAdmin state
+  
+  // Check if user is admin
+  const checkAdminStatus = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('is_admin')
+        .eq('id', user?.id)
+        .single();
+      
+      if (error) throw error;
+      
+      setIsAdmin(data?.is_admin || false);
+    } catch (error) {
+      console.error('Error checking admin status:', error);
+      setIsAdmin(false);
+    }
+  }, [user?.id]);
   
   // Completely rewritten fetchDatasetAndEntries function
   const fetchDatasetAndEntries = useCallback(async () => {
@@ -83,6 +102,14 @@ export default function LabelingClient({ id }: LabelingClientProps) {
         console.error("Dataset not found with ID:", id);
         toast.error("Dataset not found");
         setLoading(false);
+        return;
+      }
+      
+      // Check if dataset is active
+      if (datasetData.is_active === false && datasetData.owner_id !== user?.id && !isAdmin) {
+        console.error("Dataset is inactive:", id);
+        toast.error("This dataset is currently inactive and not available for labeling");
+        router.push('/dashboard');
         return;
       }
       
@@ -183,13 +210,14 @@ export default function LabelingClient({ id }: LabelingClientProps) {
     } finally {
       setLoading(false);
     }
-  }, [id, user?.id, entriesPerPage]);
+  }, [id, user?.id, entriesPerPage, isAdmin, router]);
 
   useEffect(() => {
     if (user && id) {
+      checkAdminStatus(); // Check admin status first
       fetchDatasetAndEntries();
     }
-  }, [user, id, fetchDatasetAndEntries]);
+  }, [user, id, fetchDatasetAndEntries, checkAdminStatus]);
   
   // Fix the loadPageEntries function to handle large page sizes correctly
   const loadPageEntries = async (pageIndex: number, pageSize: number, filtersToUse?: ('all' | '1' | '2' | '3' | '4' | '5')[]) => {
@@ -1172,7 +1200,14 @@ export default function LabelingClient({ id }: LabelingClientProps) {
         <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl shadow-lg p-6 text-white">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
+              <div className="flex items-center gap-2">
               <h1 className="text-2xl md:text-3xl font-bold">{dataset.name}</h1>
+              {dataset.is_active === false && (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200">
+                  Inactive
+                </span>
+              )}
+            </div>
               <div className="mt-2 flex items-center">
                 <div className="w-2 h-2 rounded-full bg-green-400 mr-2"></div>
                 <p className="text-white/90">

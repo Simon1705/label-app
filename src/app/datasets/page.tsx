@@ -133,7 +133,7 @@ export default function DatasetsPage() {
   const fetchDatasets = useCallback(async () => {
     try {
       setLoading(true);
-      // Fetch datasets owned by the user
+      // Fetch datasets owned by the user (both active and inactive for owners)
       const { data, error } = await supabase
         .from('datasets')
         .select('*')
@@ -302,7 +302,14 @@ export default function DatasetsPage() {
                           <CardTitle className="text-gray-900 dark:text-white font-bold text-lg">
                             {dataset.name}
                           </CardTitle>
-                          <Badge variant="success" className="text-xs py-1 px-2">Owner</Badge>
+                          <div className="flex gap-1">
+                            {dataset.is_active === false && (
+                              <Badge variant="outline" className="text-xs py-1 px-2 border-yellow-500 text-yellow-600 dark:text-yellow-400">
+                                Inactive
+                              </Badge>
+                            )}
+                            <Badge variant="success" className="text-xs py-1 px-2">Owner</Badge>
+                          </div>
                         </div>
                         <CardDescription className="text-gray-500 dark:text-gray-400 text-sm">
                           Created on {formatDate(dataset.created_at)}
@@ -352,7 +359,13 @@ export default function DatasetsPage() {
                       <CardFooter className="border-t border-gray-200 dark:border-gray-700/30 pt-4 flex gap-2">
                         <Link href={`/datasets/${dataset.id}`} className="flex-1">
                           <Button 
-                            className="w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 text-white shadow-md hover:shadow-lg transition-all cursor-pointer"
+                            className={`w-full text-white shadow-md hover:shadow-lg transition-all cursor-pointer ${dataset.is_active === false ? 'bg-gradient-to-r from-gray-600 via-gray-700 to-gray-800 hover:from-gray-700 hover:via-gray-800 hover:to-gray-900' : 'bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700'}`}
+                            onClick={(e) => {
+                              if (dataset.is_active === false) {
+                                e.preventDefault();
+                                alert('This dataset is currently inactive. Please contact the administrator to reactivate it.');
+                              }
+                            }}
                           >
                             View Details
                             <FiChevronRight className="ml-2" />
@@ -360,7 +373,13 @@ export default function DatasetsPage() {
                         </Link>
                         <Link href={`/labeling/${dataset.id}`} className="flex-1">
                           <Button 
-                            className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-md hover:shadow-lg transition-all cursor-pointer"
+                            className={`w-full text-white shadow-md hover:shadow-lg transition-all cursor-pointer ${dataset.is_active === false ? 'bg-gradient-to-r from-gray-600 to-gray-800 hover:from-gray-700 hover:to-gray-900' : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700'}`}
+                            onClick={(e) => {
+                              if (dataset.is_active === false) {
+                                e.preventDefault();
+                                alert('This dataset is currently inactive. Please contact the administrator to reactivate it.');
+                              }
+                            }}
                           >
                             Continue
                             <FiTag className="ml-2" />

@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Button } from '@/components/ui/Button';
 import { formatDate } from '@/lib/utils';
 import Link from 'next/link';
-import { FiDatabase, FiUsers, FiTag, FiTrash2 } from 'react-icons/fi';
+import { FiDatabase, FiUsers, FiTag, FiTrash2, FiToggleLeft, FiToggleRight } from 'react-icons/fi';
 import { toast } from 'react-hot-toast';
 
 interface DatasetWithOwner extends Dataset {
@@ -23,6 +23,7 @@ export default function AdminDatasetsPage() {
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const fetchAllDatasets = useCallback(async () => {
     try {
@@ -164,6 +165,34 @@ export default function AdminDatasetsPage() {
     }
   };
 
+  const handleToggleActiveStatus = async (datasetId: string, currentStatus: boolean) => {
+    try {
+      setTogglingId(datasetId);
+      
+      // Update the dataset's active status
+      const { error } = await supabase
+        .from('datasets')
+        .update({ is_active: !currentStatus })
+        .eq('id', datasetId);
+      
+      if (error) throw error;
+      
+      // Update the local state
+      setDatasets((prev: DatasetWithOwner[]) => 
+        prev.map((d: DatasetWithOwner) => 
+          d.id === datasetId ? { ...d, is_active: !currentStatus } : d
+        )
+      );
+      
+      toast.success(`Dataset ${!currentStatus ? 'activated' : 'deactivated'} successfully`);
+    } catch (error) {
+      console.error('Error toggling dataset status:', error);
+      toast.error(`Failed to ${currentStatus ? 'deactivate' : 'activate'} dataset`);
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
   if (!isAdmin) {
     return <div className="flex justify-center py-10">Checking permissions...</div>;
   }
@@ -207,6 +236,24 @@ export default function AdminDatasetsPage() {
                   </div>
                   <div className="flex space-x-2">
                     <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => handleToggleActiveStatus(dataset.id, dataset.is_active !== false)}
+                      isLoading={togglingId === dataset.id}
+                      disabled={togglingId === dataset.id}
+                      className={dataset.is_active === false ? "border-yellow-500 text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/20" : "border-green-500 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"}
+                    >
+                      {dataset.is_active === false ? (
+                        <>
+                          <FiToggleLeft className="mr-1" /> Activate
+                        </>
+                      ) : (
+                        <>
+                          <FiToggleRight className="mr-1" /> Deactivate
+                        </>
+                      )}
+                    </Button>
+                    <Button 
                       variant="destructive" 
                       size="sm"
                       onClick={() => handleDeleteDataset(dataset.id)}
@@ -219,7 +266,7 @@ export default function AdminDatasetsPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div className="flex items-center">
                     <FiDatabase className="mr-2 text-gray-500" />
                     <span className="text-sm text-gray-600 dark:text-gray-300">
@@ -236,6 +283,19 @@ export default function AdminDatasetsPage() {
                     <FiTag className="mr-2 text-gray-500" />
                     <span className="text-sm text-gray-600 dark:text-gray-300">
                       Invite code: {dataset.invite_code}
+                    </span>
+                  </div>
+                  <div className="flex items-center">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${dataset.is_active === false ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200' : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200'}`}>
+                      {dataset.is_active === false ? (
+                        <>
+                          <FiToggleLeft className="mr-1" size={12} /> Inactive
+                        </>
+                      ) : (
+                        <>
+                          <FiToggleRight className="mr-1" size={12} /> Active
+                        </>
+                      )}
                     </span>
                   </div>
                 </div>

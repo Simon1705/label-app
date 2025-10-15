@@ -118,7 +118,7 @@ export default function Dashboard() {
     try {
       setLoadingData(true);
       
-      // Fetch datasets owned by user
+      // Fetch datasets owned by user (both active and inactive for owners)
       const { data: ownedDatasets, error: ownedError } = await supabase
         .from('datasets')
         .select('*')
@@ -144,6 +144,7 @@ export default function Dashboard() {
           .from('datasets')
           .select('*')
           .in('id', invitedDatasetIds)
+          .eq('is_active', true) // Only show active datasets to invited users
           .order('created_at', { ascending: false });
         
         if (error) throw error;
@@ -357,7 +358,14 @@ export default function Dashboard() {
                               <CardHeader className="pb-3">
                                 <div className="flex items-start justify-between gap-2 mb-2">
                                   <CardTitle className="text-gray-900 dark:text-white font-bold text-lg">{dataset.name}</CardTitle>
-                                  <Badge variant="success" className="text-xs py-1 px-2">Owner</Badge>
+                                  <div className="flex gap-1">
+                                    {dataset.is_active === false && (
+                                      <Badge variant="outline" className="text-xs py-1 px-2 border-yellow-500 text-yellow-600 dark:text-yellow-400">
+                                        Inactive
+                                      </Badge>
+                                    )}
+                                    <Badge variant="success" className="text-xs py-1 px-2">Owner</Badge>
+                                  </div>
                                 </div>
                                 <CardDescription className="text-gray-600 dark:text-gray-300 text-sm line-clamp-2 min-h-[2.5rem]">
                                   {dataset.description || 'No description provided'}
@@ -468,12 +476,28 @@ export default function Dashboard() {
                                   
                                   <div className="flex gap-2 pt-1">
                                     <Link href={`/datasets/${dataset.id}`} className="flex-1">
-                                      <Button className="w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 text-white shadow-md hover:shadow-lg transition-all cursor-pointer">
+                                      <Button 
+                                        className={`w-full text-white shadow-md hover:shadow-lg transition-all cursor-pointer ${dataset.is_active === false ? 'bg-gradient-to-r from-gray-600 via-gray-700 to-gray-800 hover:from-gray-700 hover:via-gray-800 hover:to-gray-900' : 'bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700'}`}
+                                        onClick={(e) => {
+                                          if (dataset.is_active === false) {
+                                            e.preventDefault();
+                                            alert('This dataset is currently inactive. Please contact the administrator to reactivate it.');
+                                          }
+                                        }}
+                                      >
                                         View Details <FiChevronRight className="ml-2" />
                                       </Button>
                                     </Link>
                                     <Link href={`/labeling/${dataset.id}`} className="flex-1">
-                                      <Button className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-md hover:shadow-lg transition-all cursor-pointer">
+                                      <Button 
+                                        className={`w-full text-white shadow-md hover:shadow-lg transition-all cursor-pointer ${dataset.is_active === false ? 'bg-gradient-to-r from-gray-600 to-gray-800 hover:from-gray-700 hover:to-gray-900' : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700'}`}
+                                        onClick={(e) => {
+                                          if (dataset.is_active === false) {
+                                            e.preventDefault();
+                                            alert('This dataset is currently inactive. Please contact the administrator to reactivate it.');
+                                          }
+                                        }}
+                                      >
                                         Continue <FiTag className="ml-2" />
                                       </Button>
                                     </Link>
@@ -615,12 +639,28 @@ export default function Dashboard() {
                                     
                                     <div className="flex gap-2 pt-1">
                                       <Link href={`/datasets/${dataset.id}`} className="flex-1">
-                                        <Button className="w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 text-white shadow-md hover:shadow-lg transition-all cursor-pointer">
+                                        <Button 
+                                          className={`w-full text-white shadow-md hover:shadow-lg transition-all cursor-pointer ${dataset.is_active === false ? 'bg-gradient-to-r from-gray-600 via-gray-700 to-gray-800 hover:from-gray-700 hover:via-gray-800 hover:to-gray-900' : 'bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700'}`}
+                                          onClick={(e) => {
+                                            if (dataset.is_active === false) {
+                                              e.preventDefault();
+                                              alert('This dataset is currently inactive. Please contact the administrator to reactivate it.');
+                                            }
+                                          }}
+                                        >
                                           View Details <FiChevronRight className="ml-2" />
                                         </Button>
                                       </Link>
                                       <Link href={`/labeling/${dataset.id}`} className="flex-1">
-                                        <Button className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-md hover:shadow-lg transition-all cursor-pointer">
+                                        <Button 
+                                          className={`w-full text-white shadow-md hover:shadow-lg transition-all cursor-pointer ${dataset.is_active === false ? 'bg-gradient-to-r from-gray-600 to-gray-800 hover:from-gray-700 hover:to-gray-900' : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700'}`}
+                                          onClick={(e) => {
+                                            if (dataset.is_active === false) {
+                                              e.preventDefault();
+                                              alert('This dataset is currently inactive. Please contact the administrator to reactivate it.');
+                                            }
+                                          }}
+                                        >
                                           Continue <FiTag className="ml-2" />
                                         </Button>
                                       </Link>

@@ -14,6 +14,7 @@ export interface Dataset {
   total_entries: number;
   created_at: string;
   file_path?: string;
+  is_active?: boolean;
 }
 
 export type DatasetEntry = {

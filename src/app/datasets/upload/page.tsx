@@ -146,6 +146,7 @@ export default function UploadDataset() {
           owner_id: user?.id,
           total_entries: csvValidationResult?.totalRows || 0,
           invite_code,
+          is_active: true, // Default to active when creating a new dataset
         })
         .select()
         .single();

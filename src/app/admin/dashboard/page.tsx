@@ -224,6 +224,7 @@ export default function AdminDashboard() {
                     <th className="px-6 py-3">Owner</th>
                     <th className="px-6 py-3">Entries</th>
                     <th className="px-6 py-3">Created</th>
+                    <th className="px-6 py-3">Status</th>
                     <th className="px-6 py-3">Actions</th>
                   </tr>
                 </thead>
@@ -237,6 +238,11 @@ export default function AdminDashboard() {
                         <td className="px-6 py-4">{dataset.total_entries}</td>
                         <td className="px-6 py-4">
                           {new Date(dataset.created_at).toLocaleDateString()}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${dataset.is_active === false ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200' : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200'}`}>
+                            {dataset.is_active === false ? 'Inactive' : 'Active'}
+                          </span>
                         </td>
                         <td className="px-6 py-4">
                           <Button
