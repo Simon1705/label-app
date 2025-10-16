@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Button } from '@/components/ui/Button';
 import { toast } from 'react-hot-toast';
 import { calculateProgress, cn } from '@/lib/utils';
-import { FiArrowRight, FiArrowLeft, FiCheck, FiX, FiMinus, FiStar, FiLoader, FiAlertCircle, FiHome, FiArrowUp, FiBarChart, FiDatabase, FiChevronsLeft, FiChevronsRight, FiChevronDown, FiFilter } from 'react-icons/fi';
+import { FiArrowRight, FiArrowLeft, FiCheck, FiX, FiMinus, FiStar, FiLoader, FiAlertCircle, FiHome, FiArrowUp, FiBarChart, FiDatabase, FiChevronsLeft, FiChevronsRight, FiChevronDown, FiFilter, FiTag } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // Local Skeleton component
@@ -32,6 +32,7 @@ interface LabelingClientProps {
 export default function LabelingClient({ id }: LabelingClientProps) {
   const { user } = useAuth();
   const router = useRouter();
+  const stickyButtonsRef = useRef<HTMLDivElement>(null);
   
   const [dataset, setDataset] = useState<Dataset | null>(null);
   const [entries, setEntries] = useState<DatasetEntry[]>([]);
@@ -72,155 +73,78 @@ export default function LabelingClient({ id }: LabelingClientProps) {
     }
   }, [user?.id]);
   
-  // Completely rewritten fetchDatasetAndEntries function
-  const fetchDatasetAndEntries = useCallback(async () => {
+  // Helper function to process entry labels
+  const processEntryLabels = useCallback(async (entryIds: string[], entries: any[]) => {
+    if (!entryIds.length) return;
+    
     try {
-      console.log('⏳ Fetching dataset and entries...');
-      setLoading(true);
-      
-      // Reset all states before fetching new data
-      setSubmittedLabels({});
-      setPreviousLabels({});
-      setCompletedEntries(new Set());
-      setSelectedLabels({});
-      setPageEntries([]);
-      
-      // Fetch dataset details
-      const { data: datasetData, error: datasetError } = await supabase
-        .from('datasets')
-        .select('*')
-        .eq('id', id)
-        .single();
-      
-      if (datasetError) {
-        console.error("Error fetching dataset:", datasetError);
-        toast.error(`Error loading dataset: ${datasetError.message}`);
-        throw datasetError;
-      }
-      
-      if (!datasetData) {
-        console.error("Dataset not found with ID:", id);
-        toast.error("Dataset not found");
-        setLoading(false);
-        return;
-      }
-      
-      // Check if dataset is active
-      if (datasetData.is_active === false && datasetData.owner_id !== user?.id && !isAdmin) {
-        console.error("Dataset is inactive:", id);
-        toast.error("This dataset is currently inactive and not available for labeling");
-        router.push('/dashboard');
-        return;
-      }
-      
-      // Fetch progress
-      const { data: progressData, error: progressError } = await supabase
-        .from('label_progress')
-        .select('*')
+      // Now fetch labels ONLY for these exact entries
+      console.log(`Fetching labels for ${entryIds.length} entries on this page`);
+
+      const { data: labelData, error: labelError } = await supabase
+        .from('dataset_labels')
+        .select('entry_id, label')
         .eq('dataset_id', id)
         .eq('user_id', user?.id)
-        .single();
-      
-      if (progressError && progressError.code !== 'PGRST116') {
-        console.error("Error fetching progress:", progressError);
-        throw progressError;
-      }
-      
-      // If no progress record found, create one
-      let progressRecord = progressData;
-      if (!progressRecord) {
-        // Count total entries first
-        const { count, error: countError } = await supabase
-          .from('dataset_entries')
-          .select('*', { count: 'exact', head: true })
-          .eq('dataset_id', id);
-          
-        if (countError) {
-          console.error("Error counting entries:", countError);
-          throw countError;
-        }
-        
-        const totalEntries = count || 0;
-        
-        const { data, error: createError } = await supabase
-          .from('label_progress')
-          .insert({
-            dataset_id: id,
-            user_id: user?.id,
-            completed: 0,
-            total: totalEntries,
-            last_page: 0, // Add last page tracking
-            start_date: new Date().toISOString(), // Set start_date when first creating the record
-          })
-          .select('*')
-          .single();
-        
-        if (createError) {
-          console.error("Error creating progress record:", createError);
-          throw createError;
-        }
-        
-        progressRecord = data;
-      }
-      
-      // Check if dataset has score column by checking if any entries have score data
-      const { data: sampleEntries, error: sampleError } = await supabase
-        .from('dataset_entries')
-        .select('score')
-        .eq('dataset_id', id)
-        .limit(5); // Check first 5 entries
-      
-      if (!sampleError && sampleEntries) {
-        // If any entry has a non-null score, dataset has score column
-        const hasScore = sampleEntries.some(entry => entry.score !== null);
-        setHasScoreColumn(hasScore);
-        
-        // If no score column, disable filters by setting them to 'all'
-        if (!hasScore) {
-          setScoreFilters(['all']);
-          setPendingScoreFilters(['all']);
-        }
-      }
-      
-      setDataset(datasetData);
-      setProgress({
-        completed: progressRecord?.completed || 0,
-        total: progressRecord?.total || 0,
-        start_date: progressRecord?.start_date || null
-      });
-      setFilteredTotal(progressRecord?.total || 0);
-      
-      // Determine which page to load - use last_page if available, otherwise start from 0
-      const lastPage = progressRecord?.last_page || 0;
-      const startIndex = lastPage * entriesPerPage;
-      
-      // Set current index to the last page the user was on
-      if (startIndex < progressRecord?.total) {
-        setCurrentIndex(startIndex);
-        console.log(`🔍 Resuming from last page: ${lastPage + 1}`);
-      }
-      
-      // Fetch entries for the last page the user was on
-      await loadPageEntries(lastPage, entriesPerPage, scoreFilters);
-      
-      console.log('✅ Initial fetch complete');
-    } catch (error) {
-      console.error('❌ Error fetching data:', error);
-      toast.error('Gagal memuat data');
-    } finally {
-      setLoading(false);
-    }
-  }, [id, user?.id, entriesPerPage, isAdmin, router]);
+        .in('entry_id', entryIds);
 
-  useEffect(() => {
-    if (user && id) {
-      checkAdminStatus(); // Check admin status first
-      fetchDatasetAndEntries();
+      if (labelError) {
+        console.error("❌ Error fetching labels:", labelError);
+        throw labelError;
+      }
+
+      // Process the labels
+      const pageLabels: Record<string, LabelOption> = {};
+      const pageCompletedEntries = new Set<string>();
+      
+      if (labelData && labelData.length > 0) {
+        console.log(`Found ${labelData.length} labels for this page`);
+        
+        labelData.forEach(item => {
+          // Verify this ID is in our current page
+          if (entryIds.includes(item.entry_id)) {
+            pageLabels[item.entry_id] = item.label as LabelOption;
+            pageCompletedEntries.add(item.entry_id);
+          } else {
+            console.warn(`Found label for ID ${item.entry_id} but it's not on this page!`);
+          }
+        });
+        
+        console.log(`Page completed entries: ${pageCompletedEntries.size}`);
+      } else {
+        console.log('No labels found for this page');
+      }
+      
+      // Update state with the new data
+      setSubmittedLabels(pageLabels);
+      setPreviousLabels(pageLabels);
+      setCompletedEntries(pageCompletedEntries);
+    } catch (error) {
+      console.error('Error processing labels:', error);
     }
-  }, [user, id, fetchDatasetAndEntries, checkAdminStatus]);
+  }, [id, user?.id, setSubmittedLabels, setPreviousLabels, setCompletedEntries]);
+  
+  // Add function to update the last page in the database
+  const updateLastPage = useCallback(async (pageIndex: number) => {
+    try {
+      const { error } = await supabase
+        .from('label_progress')
+        .update({ last_page: pageIndex })
+        .eq('dataset_id', id)
+        .eq('user_id', user?.id);
+
+      if (error) {
+        console.error("Error updating last page:", error);
+      } else {
+        console.log(`✅ Last page updated to: ${pageIndex + 1}`);
+      }
+    } catch (err) {
+      console.error("Failed to update last page:", err);
+    }
+  }, [id, user?.id]);
   
   // Fix the loadPageEntries function to handle large page sizes correctly
-  const loadPageEntries = async (pageIndex: number, pageSize: number, filtersToUse?: ('all' | '1' | '2' | '3' | '4' | '5')[]) => {
+  const loadPageEntries = useCallback(async (pageIndex: number, pageSize: number, filtersToUse?: ('all' | '1' | '2' | '3' | '4' | '5')[]) => {
     const currentFilters = filtersToUse || scoreFilters;
     try {
       console.log(`⏳ Loading page ${pageIndex + 1} with size ${pageSize}...`);
@@ -492,58 +416,156 @@ export default function LabelingClient({ id }: LabelingClientProps) {
         console.error('⚠️ Even recovery failed:', recoveryError);
       }
     }
-  };
+  }, [id, hasScoreColumn, scoreFilters, entryOriginalOrder, setSubmittedLabels, setPreviousLabels, setCompletedEntries, setSelectedLabels, setPageEntries, updateLastPage, processEntryLabels]);
   
-  // Helper function to process entry labels
-  const processEntryLabels = async (entryIds: string[], entries: any[]) => {
-    if (!entryIds.length) return;
-    
+  // Completely rewritten fetchDatasetAndEntries function
+  const fetchDatasetAndEntries = useCallback(async () => {
     try {
-      // Now fetch labels ONLY for these exact entries
-      console.log(`Fetching labels for ${entryIds.length} entries on this page`);
-
-      const { data: labelData, error: labelError } = await supabase
-        .from('dataset_labels')
-        .select('entry_id, label')
+      console.log('⏳ Fetching dataset and entries...');
+      setLoading(true);
+      
+      // Reset all states before fetching new data
+      setSubmittedLabels({});
+      setPreviousLabels({});
+      setCompletedEntries(new Set());
+      setSelectedLabels({});
+      setPageEntries([]);
+      
+      // Fetch dataset details
+      const { data: datasetData, error: datasetError } = await supabase
+        .from('datasets')
+        .select('*')
+        .eq('id', id)
+        .single();
+      
+      if (datasetError) {
+        console.error("Error fetching dataset:", datasetError);
+        toast.error(`Error loading dataset: ${datasetError.message}`);
+        throw datasetError;
+      }
+      
+      if (!datasetData) {
+        console.error("Dataset not found with ID:", id);
+        toast.error("Dataset not found");
+        setLoading(false);
+        return;
+      }
+      
+      // Check if dataset is active
+      if (datasetData.is_active === false && datasetData.owner_id !== user?.id && !isAdmin) {
+        console.error("Dataset is inactive:", id);
+        toast.error("This dataset is currently inactive and not available for labeling");
+        router.push('/dashboard');
+        return;
+      }
+      
+      // Fetch progress
+      const { data: progressData, error: progressError } = await supabase
+        .from('label_progress')
+        .select('*')
         .eq('dataset_id', id)
         .eq('user_id', user?.id)
-        .in('entry_id', entryIds);
-
-      if (labelError) {
-        console.error("❌ Error fetching labels:", labelError);
-        throw labelError;
-      }
-
-      // Process the labels
-      const pageLabels: Record<string, LabelOption> = {};
-      const pageCompletedEntries = new Set<string>();
+        .single();
       
-      if (labelData && labelData.length > 0) {
-        console.log(`Found ${labelData.length} labels for this page`);
-        
-        labelData.forEach(item => {
-          // Verify this ID is in our current page
-          if (entryIds.includes(item.entry_id)) {
-            pageLabels[item.entry_id] = item.label as LabelOption;
-            pageCompletedEntries.add(item.entry_id);
-          } else {
-            console.warn(`Found label for ID ${item.entry_id} but it's not on this page!`);
-          }
-        });
-        
-        console.log(`Page completed entries: ${pageCompletedEntries.size}`);
-      } else {
-        console.log('No labels found for this page');
+      if (progressError && progressError.code !== 'PGRST116') {
+        console.error("Error fetching progress:", progressError);
+        throw progressError;
       }
       
-      // Update state with the new data
-      setSubmittedLabels(pageLabels);
-      setPreviousLabels(pageLabels);
-      setCompletedEntries(pageCompletedEntries);
+      // If no progress record found, create one
+      let progressRecord = progressData;
+      if (!progressRecord) {
+        // Count total entries first
+        const { count, error: countError } = await supabase
+          .from('dataset_entries')
+          .select('*', { count: 'exact', head: true })
+          .eq('dataset_id', id);
+          
+        if (countError) {
+          console.error("Error counting entries:", countError);
+          throw countError;
+        }
+        
+        const totalEntries = count || 0;
+        
+        const { data, error: createError } = await supabase
+          .from('label_progress')
+          .insert({
+            dataset_id: id,
+            user_id: user?.id,
+            completed: 0,
+            total: totalEntries,
+            last_page: 0, // Add last page tracking
+            start_date: new Date().toISOString(), // Set start_date when first creating the record
+          })
+          .select('*')
+          .single();
+        
+        if (createError) {
+          console.error("Error creating progress record:", createError);
+          throw createError;
+        }
+        
+        progressRecord = data;
+      }
+      
+      // Check if dataset has score column by checking if any entries have score data
+      const { data: sampleEntries, error: sampleError } = await supabase
+        .from('dataset_entries')
+        .select('score')
+        .eq('dataset_id', id)
+        .limit(5); // Check first 5 entries
+      
+      if (!sampleError && sampleEntries) {
+        // If any entry has a non-null score, dataset has score column
+        const hasScore = sampleEntries.some(entry => entry.score !== null);
+        setHasScoreColumn(hasScore);
+        
+        // If no score column, disable filters by setting them to 'all'
+        if (!hasScore) {
+          setScoreFilters(['all']);
+          setPendingScoreFilters(['all']);
+        }
+      }
+      
+      setDataset(datasetData);
+      setProgress({
+        completed: progressRecord?.completed || 0,
+        total: progressRecord?.total || 0,
+        start_date: progressRecord?.start_date || null
+      });
+      setFilteredTotal(progressRecord?.total || 0);
+      
+      // Determine which page to load - use last_page if available, otherwise start from 0
+      const lastPage = progressRecord?.last_page || 0;
+      const startIndex = lastPage * entriesPerPage;
+      
+      // Set current index to the last page the user was on
+      if (startIndex < progressRecord?.total) {
+        setCurrentIndex(startIndex);
+        console.log(`🔍 Resuming from last page: ${lastPage + 1}`);
+      }
+      
+      // Fetch entries for the last page the user was on
+      await loadPageEntries(lastPage, entriesPerPage, scoreFilters);
+      
+      console.log('✅ Initial fetch complete');
     } catch (error) {
-      console.error('Error processing labels:', error);
+      console.error('❌ Error fetching data:', error);
+      toast.error('Gagal memuat data');
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [id, user?.id, entriesPerPage, isAdmin, router, loadPageEntries, scoreFilters]);
+
+  useEffect(() => {
+    if (user && id) {
+      checkAdminStatus(); // Check admin status first
+      fetchDatasetAndEntries();
+    }
+  }, [user, id, fetchDatasetAndEntries, checkAdminStatus]);
+  
+
   
   // Update handlePageSelect to save the last page
   function handlePageSelect(pageNum: number) {
@@ -615,24 +637,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
     setLoading(false);
   };
   
-  // Add function to update the last page in the database
-  const updateLastPage = async (pageIndex: number) => {
-    try {
-      const { error } = await supabase
-        .from('label_progress')
-        .update({ last_page: pageIndex })
-        .eq('dataset_id', id)
-        .eq('user_id', user?.id);
 
-      if (error) {
-        console.error("Error updating last page:", error);
-      } else {
-        console.log(`✅ Last page updated to: ${pageIndex + 1}`);
-      }
-    } catch (err) {
-      console.error("Failed to update last page:", err);
-    }
-  };
   
   // Modify handleNext to save the last page
   const handleNext = async () => {
@@ -994,6 +999,98 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       case 'neutral': return <FiMinus className="text-yellow-500" size={24} />;
     }
   };
+  
+  // Auto-label all entries on current page with specified label
+  const autoLabelPage = (label: LabelOption) => {
+    const newLabels: Record<string, LabelOption> = {};
+    let count = 0;
+    
+    pageEntries.forEach(entry => {
+      // Auto-label all entries, overriding any existing labels
+      newLabels[entry.id] = label;
+      count++;
+    });
+    
+    setSelectedLabels(prev => ({
+      ...prev,
+      ...newLabels
+    }));
+    
+    // Show appropriate toast message
+    if (count > 0) {
+      toast.success(
+        <div className="flex items-center">
+          <span>Auto-labeled {count} entries as {label}</span>
+          <span className="ml-2 px-2 py-1 rounded text-xs font-medium bg-white/20">
+            Submit to save
+          </span>
+        </div>
+      );
+    } else {
+      toast.success('No entries found on this page');
+    }
+  };
+  
+  // Auto-label all entries on current page based on their scores
+  const autoLabelPageByScore = () => {
+    const newLabels: Record<string, LabelOption> = {};
+    let count = 0;
+    
+    pageEntries.forEach(entry => {
+      // Only auto-label entries that don't already have a label from the user
+      if (!selectedLabels[entry.id]) {
+        // Apply label based on score
+        if (entry.score !== null) {
+          if (entry.score >= 1 && entry.score <= 2) {
+            // Scores 1-2: Negative (but these are already auto-labeled by system)
+            // We'll only apply if not already labeled
+            if (!submittedLabels[entry.id]) {
+              newLabels[entry.id] = 'negative';
+              count++;
+            }
+          } else if (entry.score === 3) {
+            // Score 3: Neutral
+            newLabels[entry.id] = 'neutral';
+            count++;
+          } else if (entry.score >= 4 && entry.score <= 5) {
+            // Scores 4-5: Positive
+            newLabels[entry.id] = 'positive';
+            count++;
+          }
+        }
+      }
+    });
+    
+    setSelectedLabels(prev => ({
+      ...prev,
+      ...newLabels
+    }));
+    
+    // Show appropriate toast message
+    if (count > 0) {
+      toast.success(
+        <div className="flex items-center">
+          <span>Auto-labeled {count} entries based on scores</span>
+          <span className="ml-2 px-2 py-1 rounded text-xs font-medium bg-white/20">
+            Submit to save
+          </span>
+        </div>
+      );
+    } else {
+      toast.success('No entries needed auto-labeling');
+    }
+  };
+  useEffect(() => {
+    // Buttons are always visible, no scroll handling needed
+    if (stickyButtonsRef.current) {
+      stickyButtonsRef.current.style.display = 'block';
+      stickyButtonsRef.current.style.position = 'fixed';
+      stickyButtonsRef.current.style.right = '1.5rem';
+      stickyButtonsRef.current.style.top = '50%';
+      stickyButtonsRef.current.style.transform = 'translateY(-50%)';
+      stickyButtonsRef.current.style.zIndex = '40';
+    }
+  }, []);
   
   // Cleanup localStorage when unmounting
   useEffect(() => {
@@ -1397,7 +1494,12 @@ export default function LabelingClient({ id }: LabelingClientProps) {
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.4, delay: idx * 0.1 }}
             >
-              <Card className="overflow-hidden border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all">
+              <Card className={cn(
+                "overflow-hidden border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all",
+                selectedLabels[entry.id] && !submittedLabels[entry.id] 
+                  ? "ring-2 ring-blue-500 ring-opacity-50" 
+                  : ""
+              )}>
                 {/* Colored top border based on label status */}
                 <div className={cn(
                   "h-1.5 w-full",
@@ -1409,6 +1511,14 @@ export default function LabelingClient({ id }: LabelingClientProps) {
                     submittedLabels[entry.id] === 'negative' ? "bg-red-400" : "bg-yellow-400"
                   ) : "bg-gray-300 dark:bg-gray-600"
                 )}></div>
+                
+                {/* Auto-labeled indicator */}
+                {selectedLabels[entry.id] && !submittedLabels[entry.id] && (
+                  <div className="absolute top-2 right-2 bg-blue-500 text-white text-xs font-bold px-2 py-1 rounded-full flex items-center">
+                    <FiTag className="mr-1" size={12} />
+                    AUTO
+                  </div>
+                )}
                 
                 <div className="p-3 sm:p-4">
                   {/* Compact header */}
@@ -1645,6 +1755,20 @@ export default function LabelingClient({ id }: LabelingClientProps) {
           </motion.div>
         </div>
       </motion.div>
+      
+      {/* Sticky Auto-Label Buttons */}
+      <div 
+        ref={stickyButtonsRef}
+        className="fixed right-6 top-1/2 transform -translate-y-1/2 bg-white dark:bg-gray-800 rounded-lg shadow-xl p-4 border border-gray-200 dark:border-gray-700 z-40 flex flex-col space-y-3"
+      >
+        <h3 className="font-bold text-gray-900 dark:text-white mb-2 text-center">Auto-Label</h3>
+        <Button
+          onClick={autoLabelPageByScore}
+          className="bg-blue-500 hover:bg-blue-600 text-white flex items-center justify-center"
+        >
+          <FiTag className="mr-2" /> Run Auto-Label
+        </Button>
+      </div>
       
       <div className="pb-24"></div>
     </div>
