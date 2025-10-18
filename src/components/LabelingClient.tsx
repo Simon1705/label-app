@@ -11,7 +11,6 @@ import { toast } from 'react-hot-toast';
 import { calculateProgress, cn } from '@/lib/utils';
 import { FiArrowRight, FiArrowLeft, FiCheck, FiX, FiMinus, FiStar, FiLoader, FiAlertCircle, FiHome, FiArrowUp, FiBarChart, FiDatabase, FiChevronsLeft, FiChevronsRight, FiChevronDown, FiFilter, FiTag } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
-import { analyzeSentiment } from '@/lib/sentimentAnalysis';
 
 // Local Skeleton component
 function Skeleton({
@@ -80,6 +79,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
     
     try {
       // Now fetch labels ONLY for these exact entries
+      console.log(`Fetching labels for ${entryIds.length} entries on this page`);
 
       const { data: labelData, error: labelError } = await supabase
         .from('dataset_labels')
@@ -89,7 +89,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
         .in('entry_id', entryIds);
 
       if (labelError) {
-        console.error("Error fetching labels:", labelError);
+        console.error("❌ Error fetching labels:", labelError);
         throw labelError;
       }
 
@@ -98,7 +98,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       const pageCompletedEntries = new Set<string>();
       
       if (labelData && labelData.length > 0) {
-
+        console.log(`Found ${labelData.length} labels for this page`);
         
         labelData.forEach(item => {
           // Verify this ID is in our current page
@@ -110,9 +110,9 @@ export default function LabelingClient({ id }: LabelingClientProps) {
           }
         });
         
-
+        console.log(`Page completed entries: ${pageCompletedEntries.size}`);
       } else {
-
+        console.log('No labels found for this page');
       }
       
       // Update state with the new data
@@ -136,7 +136,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       if (error) {
         console.error("Error updating last page:", error);
       } else {
-        
+        console.log(`✅ Last page updated to: ${pageIndex + 1}`);
       }
     } catch (err) {
       console.error("Failed to update last page:", err);
@@ -147,6 +147,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
   const loadPageEntries = useCallback(async (pageIndex: number, pageSize: number, filtersToUse?: ('all' | '1' | '2' | '3' | '4' | '5')[]) => {
     const currentFilters = filtersToUse || scoreFilters;
     try {
+      console.log(`⏳ Loading page ${pageIndex + 1} with size ${pageSize}...`);
       
       // Clear existing data for this page
       setSubmittedLabels({});
@@ -159,12 +160,12 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       const start = pageIndex * pageSize;
       const end = start + pageSize - 1;
       
-
+      console.log(`Fetching entries from ${start} to ${end}`);
       
       // First attempt to get ALL entry IDs to establish the master order if we don't have it yet
       if (Object.keys(entryOriginalOrder).length === 0) {
         try {
-
+          console.log("Fetching all entry IDs to establish original order...");
           
           // Build query with score filters
           let query = supabase
@@ -189,7 +190,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
             
           if (idsError) {
             console.error("Error fetching all entry IDs:", idsError);
-
+            console.error("Error details:", JSON.stringify(idsError));
             // Continue even if this fails - we'll fall back to ID-based ordering
           } else if (allEntryIds && allEntryIds.length > 0) {
             // Create a mapping of ID to original position
@@ -198,12 +199,12 @@ export default function LabelingClient({ id }: LabelingClientProps) {
               orderMap[entry.id] = index;
             });
             
-
+            console.log(`✅ Established order for ${allEntryIds.length} entries`);
             setEntryOriginalOrder(orderMap);
           }
         } catch (orderError) {
           console.error("Error establishing original order:", orderError);
-
+          console.error("Full error:", orderError instanceof Error ? orderError.message : String(orderError));
           // Continue with the query even if this fails
         }
       }
@@ -235,11 +236,11 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       // Ensure our range is valid based on total count
       const validEnd = totalCount ? Math.min(end, totalCount - 1) : end;
       
-
+      console.log(`Total entries: ${totalCount}, adjusted range: ${start} to ${validEnd}`);
       
       // Check if the starting point is beyond available data
       if (totalCount && start >= totalCount) {
-  
+        console.warn(`Start index ${start} is beyond total entries ${totalCount}`);
         // Reset to first page in case of invalid range
         let firstPageQuery = supabase
           .from('dataset_entries')
@@ -265,6 +266,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
         }
         
         if (firstPageData && firstPageData.length > 0) {
+          console.log(`✅ Recovered by loading first page with ${firstPageData.length} entries`);
           setPageEntries(firstPageData);
           setCurrentIndex(0);
           // Update last page to 0 in database
@@ -297,12 +299,12 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       
       if (entriesError) {
         console.error("❌ Error fetching entries:", entriesError);
-
+        console.error("Error details:", JSON.stringify(entriesError));
         throw entriesError;
       }
       
       if (!entriesData || entriesData.length === 0) {
-  
+        console.log("No entries found for this page");
         // Try to recover by loading the first page
         let firstPageQuery = supabase
           .from('dataset_entries')
@@ -328,6 +330,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
         }
         
         if (firstPageData && firstPageData.length > 0) {
+          console.log(`✅ Recovered by loading first page with ${firstPageData.length} entries`);
           setPageEntries(firstPageData);
           setCurrentIndex(0);
           // Update last page to 0 in database
@@ -350,13 +353,13 @@ export default function LabelingClient({ id }: LabelingClientProps) {
           const orderB = entryOriginalOrder[b.id] ?? Number.MAX_SAFE_INTEGER;
           return orderA - orderB;
         });
-
+        console.log("Entries sorted according to original order");
       } else {
-
+        console.log("Using default order by ID (original order mapping not available)");
       }
       
       const entryIds = sortedEntries.map(e => e.id);
-
+      console.log(`Page entry IDs in display order: ${entryIds.length} entries`);
 
       // Store these entries in the full entries array if needed
       setEntries(prevEntries => {
@@ -376,9 +379,9 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       // Process labels for these entries
       await processEntryLabels(entryIds, sortedEntries);
       
-
+      console.log(`✅ Loaded page ${pageIndex + 1} with ${sortedEntries.length} entries`);
     } catch (error) {
-      console.error('Error loading page:', error);
+      console.error('❌ Error loading page:', error);
       toast.error('Failed to load page. Trying to recover...');
       
       // Last resort recovery - load first page with a smaller size
@@ -402,7 +405,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
         const { data: recoveryData } = await recoveryQuery;
           
         if (recoveryData && recoveryData.length > 0) {
-
+          console.log('✅ Emergency recovery with 10 entries successful');
           setPageEntries(recoveryData);
           setCurrentIndex(0);
           // Process these entries
@@ -410,7 +413,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
           await processEntryLabels(recoveryIds, recoveryData);
         }
       } catch (recoveryError) {
-        console.error('Even recovery failed:', recoveryError);
+        console.error('⚠️ Even recovery failed:', recoveryError);
       }
     }
   }, [id, hasScoreColumn, scoreFilters, entryOriginalOrder, setSubmittedLabels, setPreviousLabels, setCompletedEntries, setSelectedLabels, setPageEntries, updateLastPage, processEntryLabels]);
@@ -418,7 +421,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
   // Completely rewritten fetchDatasetAndEntries function
   const fetchDatasetAndEntries = useCallback(async () => {
     try {
-
+      console.log('⏳ Fetching dataset and entries...');
       setLoading(true);
       
       // Reset all states before fetching new data
@@ -540,15 +543,15 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       // Set current index to the last page the user was on
       if (startIndex < progressRecord?.total) {
         setCurrentIndex(startIndex);
-
+        console.log(`🔍 Resuming from last page: ${lastPage + 1}`);
       }
       
       // Fetch entries for the last page the user was on
       await loadPageEntries(lastPage, entriesPerPage, scoreFilters);
       
-
+      console.log('✅ Initial fetch complete');
     } catch (error) {
-      console.error('Error fetching data:', error);
+      console.error('❌ Error fetching data:', error);
       toast.error('Gagal memuat data');
     } finally {
       setLoading(false);
@@ -587,7 +590,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
   // Function to reset pagination when filter changes
   const resetFilter = async (newFilters?: ('all' | '1' | '2' | '3' | '4' | '5')[]) => {
     const filtersToUse = newFilters || scoreFilters;
-
+    console.log(`⏳ Resetting filters to: ${filtersToUse.join(', ')}`);
     setLoading(true);
     setSelectedLabels({});
     
@@ -646,12 +649,12 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       // Check if next page exists
       const totalPages = Math.ceil(filteredTotal / entriesPerPage);
       if (nextPage >= totalPages) {
-
+        console.log('No more pages available');
         setLoading(false);
         return;
       }
       
-
+      console.log(`⏳ Navigating to next page: ${nextPage + 1}`);
       
       // Clear selections first
       setSelectedLabels({});
@@ -665,7 +668,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       // Save the last page to the database
       await updateLastPage(nextPage);
       
-
+      console.log(`✅ Navigation complete`);
     } catch (error) {
       console.error('❌ Error navigating to next page:', error);
       toast.error('Gagal memuat data berikutnya');
@@ -677,7 +680,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
   // Modify handlePrevious to save the last page
   const handlePrevious = () => {
     if (currentIndex >= entriesPerPage) {
-
+      console.log(`⏳ Navigating to previous page: ${currentIndex / entriesPerPage}`);
       
       // Clear selections
       setSelectedLabels({});
@@ -693,7 +696,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
         // Save the last page to the database
         updateLastPage(prevPage);
         
-  
+        console.log(`✅ Navigation complete`);
       });
     }
   };
@@ -703,7 +706,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
     if (Object.keys(selectedLabels).length === 0 || !user) return;
     
     try {
-
+      console.log('⏳ Submitting labels:', selectedLabels);
       setSubmitting(true);
       
       interface LabelEntry {
@@ -725,7 +728,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
         }
       }
 
-
+      console.log(`Processing ${updateLabels.length} updates and ${newLabels.length} new labels`);
 
       // Batch update existing labels
       if (updateLabels.length > 0) {
@@ -870,7 +873,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
         }
       }
 
-
+      console.log('✅ Labels submitted successfully');
     } catch (error: any) {
       console.error('❌ Error submitting labels:', error);
       toast.error(error.message || 'Gagal menyimpan label');
@@ -881,7 +884,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
   
   // Update changeEntriesPerPage to handle large page sizes better
   const changeEntriesPerPage = (count: number) => {
-
+    console.log(`⏳ Changing entries per page to ${count}`);
     
     // Clear all previous state
       setSelectedLabels({});
@@ -900,7 +903,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
     // Load first page with new size directly
     loadPageEntries(0, count, scoreFilters)
       .then(() => {
-
+        console.log(`✅ Successfully changed to ${count} entries per page`);
         // Update last page to 0 in database
         updateLastPage(0);
       setLoading(false);
@@ -1077,54 +1080,6 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       toast.success('No entries needed auto-labeling');
     }
   };
-  
-  // Auto-label all entries on current page based on text content analysis
-  const autoLabelPageByText = async () => {
-    const newLabels: Record<string, LabelOption> = {};
-    let count = 0;
-    
-    // Show loading state
-    toast.loading('Analyzing text sentiment...');
-    
-    try {
-      // Process entries sequentially to avoid overwhelming the API
-      for (const entry of pageEntries) {
-        // Only auto-label entries that don't already have a label from the user
-        if (!selectedLabels[entry.id]) {
-          // Apply label based on text content analysis
-          const sentiment = await analyzeSentiment(entry.text);
-          newLabels[entry.id] = sentiment;
-          count++;
-        }
-      }
-      
-      setSelectedLabels(prev => ({
-        ...prev,
-        ...newLabels
-      }));
-      
-      // Dismiss loading toast and show success message
-      toast.dismiss();
-      
-      // Show appropriate toast message
-      if (count > 0) {
-        toast.success(
-          <div className="flex items-center">
-            <span>Auto-labeled {count} entries based on text analysis</span>
-            <span className="ml-2 px-2 py-1 rounded text-xs font-medium bg-white/20">
-              Submit to save
-            </span>
-          </div>
-        );
-      } else {
-        toast.success('No entries needed auto-labeling');
-      }
-    } catch (error) {
-      toast.dismiss();
-      console.error('Error in text-based auto-labeling:', error);
-      toast.error('Failed to auto-label entries based on text analysis');
-    }
-  };
   useEffect(() => {
     // Buttons are always visible, no scroll handling needed
     if (stickyButtonsRef.current) {
@@ -1181,7 +1136,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
   // Add the toggleDebugMode function
   const toggleDebugMode = () => {
     setDebugMode(prevMode => !prevMode);
-
+    console.log("Debug mode toggled");
   };
   
   // Helper function to generate pagination range with ellipsis
@@ -1811,13 +1766,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
           onClick={autoLabelPageByScore}
           className="bg-blue-500 hover:bg-blue-600 text-white flex items-center justify-center"
         >
-          <FiTag className="mr-2" /> Auto-Label by Score
-        </Button>
-        <Button
-          onClick={autoLabelPageByText}
-          className="bg-purple-500 hover:bg-purple-600 text-white flex items-center justify-center"
-        >
-          <FiTag className="mr-2" /> Auto-Label by Text
+          <FiTag className="mr-2" /> Run Auto-Label
         </Button>
       </div>
       
