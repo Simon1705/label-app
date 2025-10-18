@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "src/pages/api/sentiment/analyze.py",
+      "use": "@vercel/python",
+      "config": {
+        "runtime": "python3.9",
+        "includeFiles": "python-api/**"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/sentiment/analyze",
+      "dest": "/src/pages/api/sentiment/analyze.py",
+      "methods": ["POST", "OPTIONS"]
+    }
+  ]
+}

@@ -210,7 +210,7 @@ export default function UploadDataset() {
         return;
       }
       
-      console.log(`Processing ${rows.length} rows from CSV`);
+
       
       const headers = Object.keys(rows[0] || {});
       const hasScoreColumn = headers.includes('score');
@@ -228,7 +228,7 @@ export default function UploadDataset() {
             score: hasScoreColumn ? parseInt(row.score) : null,
           }));
           
-          console.log(`Inserting chunk ${i/chunkSize + 1} of ${Math.ceil(rows.length/chunkSize)}, size: ${chunk.length}`);
+
           
           const { data: insertedEntries, error: entriesError } = await supabase
             .from('dataset_entries')
@@ -274,7 +274,7 @@ export default function UploadDataset() {
         if (labelError) {
           console.error('Error inserting automatic labels:', labelError);
         } else {
-          console.log(`Automatically labeled ${negativeEntries.length} entries as negative for owner`);
+
           
           // Update progress for automatically labeled entries for the owner
           const { error: progressError } = await supabase
@@ -366,7 +366,7 @@ export default function UploadDataset() {
             if (bulkLabelError) {
               console.error('Error inserting automatic labels for joined users:', bulkLabelError);
             } else {
-              console.log(`Automatically labeled ${allAutomaticLabels.length} entries for ${joinedUsers.length} joined users (based on ${allNegativeEntries.length} entries with scores 1-2)`);
+
               
               // Update progress for all joined users
               for (const update of userProgressUpdates) {

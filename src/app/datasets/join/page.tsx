@@ -108,7 +108,7 @@ export default function JoinLabeling() {
         }
         
         if (negativeEntries.length === 0) {
-          console.log('No entries with scores 1-2 found for automatic labeling');
+          // No entries with scores 1-2 found for automatic labeling
         } else {
           // Create automatic labels
           const automaticLabels = negativeEntries.map(entry => ({
@@ -137,7 +137,7 @@ export default function JoinLabeling() {
               console.error('Error updating progress for automatic labels:', updateError);
               // Don't throw error here as we still want the user to join
             } else {
-              console.log(`Automatically labeled ${negativeEntries.length} entries as negative for user ${user?.id}`);
+
             }
           }
         }
