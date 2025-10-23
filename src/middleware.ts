@@ -24,8 +24,12 @@ export function middleware(request: NextRequest) {
   
   // Log for debugging (only in development)
   if (process.env.NODE_ENV === 'development') {
-    // Removed console.log statements
-
+    // These logs are only shown in development mode, which is appropriate
+    console.log('Maintenance mode active:', MAINTENANCE_MODE);
+    console.log('Current path:', pathname);
+    console.log('Is allowed path:', isAllowedPath);
+    console.log('Maintenance cookie:', maintenanceCookie);
+    console.log('Has access:', hasAccess);
   }
   
   // If it's not an allowed path and user doesn't have access, redirect to maintenance page
