@@ -142,12 +142,19 @@ export default function LabelingPage() {
       const { data: datasetsData, error: datasetsError } = await supabase
         .from('datasets')
         .select('*, users!datasets_owner_id_fkey(username)')
-        .in('id', datasetIds);
+        .in('id', datasetIds)
+        .eq('is_active', true); // Only show active datasets
       
       if (datasetsError) throw datasetsError;
       
-      // Combine data
+      // Combine data - only include progress for active datasets
+      const activeDatasetIds = datasetsData?.map(d => d.id) || [];
       const combinedTasks = progressData?.map(progress => {
+        // Only process progress for active datasets
+        if (!activeDatasetIds.includes(progress.dataset_id)) {
+          return null; // Will be filtered out
+        }
+        
         const dataset = datasetsData?.find(d => d.id === progress.dataset_id);
         return {
           id: progress.id,
@@ -158,7 +165,7 @@ export default function LabelingPage() {
           created_at: progress.created_at,
           owner_username: dataset?.users?.username || 'Unknown',
         };
-      }) || [];
+      }).filter(task => task !== null) || [];
       
       setTasks(combinedTasks);
     } catch (error) {
