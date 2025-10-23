@@ -1,14 +1,29 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { MAINTENANCE_MODE } from '@/lib/maintenanceConfig';
+import { MAINTENANCE_MODE, ACCESS_CODE } from '@/lib/maintenanceConfig';
 
 export function middleware(request: NextRequest) {
-  // If maintenance mode is not enabled, continue normally
+  const pathname = request.nextUrl.pathname;
+  
+  // If maintenance mode is not enabled, block access to maintenance page and remove access cookie
   if (!MAINTENANCE_MODE) {
+    // If user is trying to access maintenance page when maintenance is off, redirect to home
+    if (pathname === '/maintenance') {
+      const url = request.nextUrl.clone();
+      url.pathname = '/';
+      return NextResponse.redirect(url);
+    }
+    
+    // Remove maintenance access cookie if it exists
+    const maintenanceCookie = request.cookies.get('maintenanceAccessGranted');
+    if (maintenanceCookie) {
+      const response = NextResponse.next();
+      response.cookies.delete('maintenanceAccessGranted');
+      return response;
+    }
+    
     return NextResponse.next();
   }
-  
-  const pathname = request.nextUrl.pathname;
   
   // Define paths that should be accessible even during maintenance
   const isAllowedPath = 

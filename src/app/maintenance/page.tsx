@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { FiAlertTriangle } from 'react-icons/fi';
+import { ACCESS_CODE } from '@/lib/maintenanceConfig';
 
 export default function MaintenancePage() {
   const [showAccessModal, setShowAccessModal] = useState(false);
@@ -28,10 +29,7 @@ export default function MaintenancePage() {
   const handleAccessSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // In a real implementation, this would be imported from maintenanceConfig
-    const correctCode = 'admin123';
-    
-    if (accessCode === correctCode) {
+    if (accessCode === ACCESS_CODE) {
       try {
         // Set cookie for 24 hours access
         const expires = new Date(Date.now() + 24 * 60 * 60 * 1000).toUTCString();
