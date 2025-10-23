@@ -2,11 +2,10 @@
 
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useMaintenance } from '@/contexts/MaintenanceContext';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { FiLogIn, FiUser, FiLoader, FiAlertTriangle } from 'react-icons/fi';
+import { FiLogIn, FiUser, FiLoader } from 'react-icons/fi';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
 
@@ -59,7 +58,6 @@ function LoadingPage() {
 
 export default function LoginPage() {
   const { login, loading } = useAuth();
-  const { isMaintenanceMode, isAccessGranted } = useMaintenance();
   const [username, setUsername] = useState('');
   const [error, setError] = useState('');
 
@@ -122,14 +120,6 @@ export default function LoginPage() {
                 Welcome back! Please enter your credentials
               </CardDescription>
             </CardHeader>
-            {isMaintenanceMode && !isAccessGranted && (
-              <div className="mx-6 mb-4 p-3 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 rounded-lg flex items-center">
-                <FiAlertTriangle className="mr-2 flex-shrink-0" />
-                <span className="text-sm">
-                  The application is currently under maintenance. Only authorized users can access it.
-                </span>
-              </div>
-            )}
             <form onSubmit={handleLogin}>
               <CardContent className="space-y-6">
                 <div className="relative group">

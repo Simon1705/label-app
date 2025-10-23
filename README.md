@@ -1,4 +1,4 @@
-# Label App - Dataset Labeling Tool
+i# Label App - Dataset Labeling Tool
 
 Aplikasi web untuk memudahkan labeling dataset berupa ulasan dari suatu aplikasi. Dibuat dengan Next.js dan Supabase.
 
@@ -284,25 +284,6 @@ npm run dev
 3. Bagikan invite code ke user lain untuk mulai melabeli dataset
 4. Monitor progress labeling
 5. Export dataset yang telah dilabeli
-
-## Maintenance Mode
-
-Aplikasi ini mendukung fitur maintenance mode yang memungkinkan admin untuk:
-- Menonaktifkan akses pengguna saat aplikasi dalam perbaikan
-- Memberikan akses khusus kepada pengguna yang memiliki kode akses
-
-### Mengaktifkan Maintenance Mode
-1. Login sebagai admin
-2. Buka halaman "Maintenance" di dashboard admin
-3. Aktifkan toggle "Maintenance Mode"
-4. Simpan perubahan
-
-### Mengakses Aplikasi saat Maintenance Mode
-Saat maintenance mode aktif, pengguna biasa tidak dapat mengakses aplikasi. 
-Namun, pengguna dengan kode akses dapat tetap mengakses dengan cara:
-1. Tekan tombol `Ctrl + M` di keyboard
-2. Masukkan kode akses: `admin123`
-3. Klik "Verify Access"
 
 ## Format Dataset CSV
 
