@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { User, Dataset } from '@/types';
-import { FiUsers, FiDatabase, FiPlus } from 'react-icons/fi';
+import { FiUsers, FiDatabase, FiPlus, FiSettings } from 'react-icons/fi';
 import Link from 'next/link';
 import { toast } from 'react-hot-toast';
 import MigrationCard from '@/components/MigrationCard';
@@ -147,11 +147,18 @@ export default function AdminDashboard() {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Admin Dashboard</h1>
           <p className="text-gray-500 dark:text-gray-400">Manage users and monitor datasets</p>
         </div>
-        <Link href="/admin/users/create">
-          <Button>
-            <FiPlus className="mr-2" /> Create New User
-          </Button>
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/admin/maintenance">
+            <Button variant="outline">
+              <FiSettings className="mr-2" /> Maintenance
+            </Button>
+          </Link>
+          <Link href="/admin/users/create">
+            <Button>
+              <FiPlus className="mr-2" /> Create New User
+            </Button>
+          </Link>
+        </div>
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -277,4 +284,4 @@ export default function AdminDashboard() {
       </Card>
     </div>
   );
-} 
+}

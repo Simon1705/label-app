@@ -2,16 +2,14 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { FiUser, FiLogOut, FiMenu, FiX, FiHome, FiDatabase, FiTag, FiUsers, FiGrid, FiPlusCircle, FiAlertTriangle } from 'react-icons/fi';
+import { FiUser, FiLogOut, FiMenu, FiX, FiHome, FiDatabase, FiTag, FiUsers, FiGrid, FiPlusCircle } from 'react-icons/fi';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useMaintenance } from '@/contexts/MaintenanceContext';
 import { Button } from '@/components/ui/Button';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function Navbar() {
   const { user, logout, isAdmin } = useAuth();
-  const { isMaintenanceMode, isAccessGranted } = useMaintenance();
   const pathname = usePathname();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -115,11 +113,6 @@ export default function Navbar() {
 
           {/* Desktop User Menu */}
           <div className="hidden md:flex md:items-center md:space-x-4">
-            {isMaintenanceMode && !isAccessGranted && (
-              <div className="flex items-center mr-4 px-3 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 rounded-full text-sm">
-                <FiAlertTriangle className="mr-1" /> Maintenance Mode
-              </div>
-            )}
             {user ? (
               <div className="flex items-center space-x-4">
                 <div className="flex items-center text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-800 rounded-full px-4 py-1.5">
@@ -205,11 +198,6 @@ export default function Navbar() {
               )}
             </div>
             <div className="pt-3 pb-3 border-t border-gray-200 dark:border-gray-800">
-              {isMaintenanceMode && !isAccessGranted && (
-                <div className="px-3 mb-2 flex items-center px-3 py-2 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 rounded-lg text-sm">
-                  <FiAlertTriangle className="mr-2" /> Maintenance Mode
-                </div>
-              )}
               {user ? (
                 <div className="px-3 space-y-2">
                   <div className="flex items-center px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-800 rounded-lg">
@@ -246,4 +234,4 @@ export default function Navbar() {
       </AnimatePresence>
     </motion.nav>
   );
-}
+} 

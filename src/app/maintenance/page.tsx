@@ -1,42 +1,128 @@
 'use client';
 
-import { FiLock } from 'react-icons/fi';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { FiAlertTriangle, FiKey } from 'react-icons/fi';
 
 export default function MaintenancePage() {
+  const [showAccessModal, setShowAccessModal] = useState(false);
+  const [accessCode, setAccessCode] = useState('');
+  const [error, setError] = useState('');
+  const router = useRouter();
+
+  // Handle Ctrl + M keyboard shortcut
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key === 'm') {
+        e.preventDefault();
+        setShowAccessModal(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
+  const handleAccessSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // In a real implementation, this would be imported from maintenanceConfig
+    const correctCode = 'admin123';
+    
+    if (accessCode === correctCode) {
+      // Set cookie for 24 hours access
+      const expires = new Date(Date.now() + 24 * 60 * 60 * 1000).toUTCString();
+      document.cookie = `maintenanceAccessGranted=true; expires=${expires}; path=/`;
+      
+      // Redirect to home page
+      router.push('/');
+    } else {
+      setError('Invalid access code. Please try again.');
+    }
+  };
+
   return (
-    <div className="fixed inset-0 bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center">
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-purple-300 dark:bg-purple-900 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob"></div>
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-indigo-300 dark:bg-indigo-900 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-2000"></div>
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-pink-300 dark:bg-pink-900 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-4000"></div>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
+      <div className="max-w-md w-full bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
+        <div className="bg-gradient-to-r from-yellow-400 to-orange-500 p-6 text-center">
+          <FiAlertTriangle className="mx-auto h-16 w-16 text-white" />
+          <h1 className="mt-4 text-3xl font-bold text-white">Under Maintenance</h1>
+        </div>
+        
+        <div className="p-8 text-center">
+          <p className="text-gray-600 dark:text-gray-300 mb-6">
+            We're currently performing scheduled maintenance. We'll be back shortly.
+          </p>
+          
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-6">
+            <p className="text-yellow-800 dark:text-yellow-200 text-sm">
+              <FiKey className="inline mr-1" />
+              Press <kbd className="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded">Ctrl</kbd> + <kbd className="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded">M</kbd> for staff access
+            </p>
+          </div>
+          
+          <div className="text-xs text-gray-500 dark:text-gray-400 mt-8">
+            <p>Thank you for your patience.</p>
+          </div>
+        </div>
       </div>
 
-      <Card className="backdrop-blur-lg bg-white/70 dark:bg-gray-800/70 border border-white/20 dark:border-gray-700/50 shadow-2xl w-full max-w-md mx-4 z-10">
-        <CardHeader className="space-y-1 text-center">
-          <div className="flex justify-center mb-4">
-            <div className="h-24 w-24 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-2xl flex items-center justify-center shadow-lg">
-              <FiLock className="text-white text-4xl" />
+      {/* Access Code Modal */}
+      {showAccessModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white">Staff Access</h2>
+                <button 
+                  onClick={() => setShowAccessModal(false)}
+                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                >
+                  ✕
+                </button>
+              </div>
+              
+              <form onSubmit={handleAccessSubmit}>
+                <div className="mb-4">
+                  <label htmlFor="accessCode" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Access Code
+                  </label>
+                  <input
+                    type="password"
+                    id="accessCode"
+                    value={accessCode}
+                    onChange={(e) => {
+                      setAccessCode(e.target.value);
+                      setError('');
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                    placeholder="Enter access code"
+                  />
+                  {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+                </div>
+                
+                <div className="flex justify-end space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowAccessModal(false)}
+                    className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
+                    Submit
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
-          <CardTitle className="text-4xl font-extrabold bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
-            Under Maintenance
-          </CardTitle>
-          <CardDescription className="text-gray-600 dark:text-gray-300 text-lg">
-            We're currently performing scheduled maintenance
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="text-center">
-            <p className="text-gray-700 dark:text-gray-300">
-              Our application is temporarily offline for maintenance. We'll be back shortly.
-            </p>
-            <p className="text-gray-500 dark:text-gray-400 mt-2 text-sm">
-              Thank you for your patience.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+        </div>
+      )}
     </div>
   );
 }
