@@ -25,19 +25,28 @@ export default function MaintenancePage() {
     };
   }, []);
 
-  const handleAccessSubmit = (e: React.FormEvent) => {
+  const handleAccessSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // In a real implementation, this would be imported from maintenanceConfig
     const correctCode = 'admin123';
     
     if (accessCode === correctCode) {
-      // Set cookie for 24 hours access
-      const expires = new Date(Date.now() + 24 * 60 * 60 * 1000).toUTCString();
-      document.cookie = `maintenanceAccessGranted=true; expires=${expires}; path=/`;
-      
-      // Redirect to home page
-      router.push('/');
+      try {
+        // Set cookie for 24 hours access
+        const expires = new Date(Date.now() + 24 * 60 * 60 * 1000).toUTCString();
+        document.cookie = `maintenanceAccessGranted=true; expires=${expires}; path=/`;
+        
+        // Small delay to ensure cookie is set
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Redirect to home page
+        router.push('/');
+        router.refresh(); // Force a refresh to bypass middleware
+      } catch (err) {
+        console.error('Error during redirect:', err);
+        setError('An error occurred. Please try again.');
+      }
     } else {
       setError('Invalid access code. Please try again.');
     }

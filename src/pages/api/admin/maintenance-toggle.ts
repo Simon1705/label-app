@@ -31,6 +31,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Extract the new value to return in the response
     const newMode = updatedConfig.includes('export const MAINTENANCE_MODE = true;') ? true : false;
     
+    // Add a small delay to ensure file write completes
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
     res.status(200).json({ 
       success: true, 
       isMaintenanceMode: newMode,

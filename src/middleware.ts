@@ -22,19 +22,23 @@ export function middleware(request: NextRequest) {
   const maintenanceCookie = request.cookies.get('maintenanceAccessGranted');
   const hasAccess = maintenanceCookie?.value === 'true';
   
-  // Log for debugging
-  console.log('Maintenance mode active:', MAINTENANCE_MODE);
-  console.log('Current path:', pathname);
-  console.log('Is allowed path:', isAllowedPath);
-  console.log('Maintenance cookie:', maintenanceCookie);
-  console.log('Has access:', hasAccess);
+  // Log for debugging (only in development)
+  if (process.env.NODE_ENV === 'development') {
+    console.log('Maintenance mode active:', MAINTENANCE_MODE);
+    console.log('Current path:', pathname);
+    console.log('Is allowed path:', isAllowedPath);
+    console.log('Maintenance cookie:', maintenanceCookie);
+    console.log('Has access:', hasAccess);
+  }
   
   // If it's not an allowed path and user doesn't have access, redirect to maintenance page
   if (!isAllowedPath && !hasAccess) {
-    console.log('Redirecting to maintenance page');
-    const url = request.nextUrl.clone();
-    url.pathname = '/maintenance';
-    return NextResponse.redirect(url);
+    // Only redirect if not already on maintenance page
+    if (pathname !== '/maintenance') {
+      const url = request.nextUrl.clone();
+      url.pathname = '/maintenance';
+      return NextResponse.redirect(url);
+    }
   }
   
   return NextResponse.next();
