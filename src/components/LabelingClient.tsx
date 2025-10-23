@@ -11,7 +11,6 @@ import { toast } from 'react-hot-toast';
 import { calculateProgress, cn } from '@/lib/utils';
 import { FiArrowRight, FiArrowLeft, FiCheck, FiX, FiMinus, FiStar, FiLoader, FiAlertCircle, FiHome, FiArrowUp, FiBarChart, FiDatabase, FiChevronsLeft, FiChevronsRight, FiChevronDown, FiFilter, FiTag } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
-import { analyzeSentiment } from '@/lib/sentimentAnalysis';
 
 // Local Skeleton component
 function Skeleton({
@@ -1081,54 +1080,6 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       toast.success('No entries needed auto-labeling');
     }
   };
-  
-  // Auto-label all entries on current page based on text content analysis
-  const autoLabelPageByText = async () => {
-    const newLabels: Record<string, LabelOption> = {};
-    let count = 0;
-    
-    // Show loading state
-    toast.loading('Analyzing text sentiment...');
-    
-    try {
-      // Process entries sequentially to avoid overwhelming the API
-      for (const entry of pageEntries) {
-        // Only auto-label entries that don't already have a label from the user
-        if (!selectedLabels[entry.id]) {
-          // Apply label based on text content analysis
-          const sentiment = await analyzeSentiment(entry.text);
-          newLabels[entry.id] = sentiment;
-          count++;
-        }
-      }
-      
-      setSelectedLabels(prev => ({
-        ...prev,
-        ...newLabels
-      }));
-      
-      // Dismiss loading toast and show success message
-      toast.dismiss();
-      
-      // Show appropriate toast message
-      if (count > 0) {
-        toast.success(
-          <div className="flex items-center">
-            <span>Auto-labeled {count} entries based on text analysis</span>
-            <span className="ml-2 px-2 py-1 rounded text-xs font-medium bg-white/20">
-              Submit to save
-            </span>
-          </div>
-        );
-      } else {
-        toast.success('No entries needed auto-labeling');
-      }
-    } catch (error) {
-      toast.dismiss();
-      console.error('Error in text-based auto-labeling:', error);
-      toast.error('Failed to auto-label entries based on text analysis');
-    }
-  };
   useEffect(() => {
     // Buttons are always visible, no scroll handling needed
     if (stickyButtonsRef.current) {
@@ -1815,13 +1766,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
           onClick={autoLabelPageByScore}
           className="bg-blue-500 hover:bg-blue-600 text-white flex items-center justify-center"
         >
-          <FiTag className="mr-2" /> Auto-Label by Score
-        </Button>
-        <Button
-          onClick={autoLabelPageByText}
-          className="bg-purple-500 hover:bg-purple-600 text-white flex items-center justify-center"
-        >
-          <FiTag className="mr-2" /> Auto-Label by Text
+          <FiTag className="mr-2" /> Run Auto-Label
         </Button>
       </div>
       
