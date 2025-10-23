@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { FiAlertTriangle, FiKey } from 'react-icons/fi';
+import { FiAlertTriangle } from 'react-icons/fi';
 
 export default function MaintenancePage() {
   const [showAccessModal, setShowAccessModal] = useState(false);
@@ -44,7 +44,7 @@ export default function MaintenancePage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4 overflow-hidden">
       <div className="max-w-md w-full bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
         <div className="bg-gradient-to-r from-yellow-400 to-orange-500 p-6 text-center">
           <FiAlertTriangle className="mx-auto h-16 w-16 text-white" />
@@ -55,13 +55,6 @@ export default function MaintenancePage() {
           <p className="text-gray-600 dark:text-gray-300 mb-6">
             We're currently performing scheduled maintenance. We'll be back shortly.
           </p>
-          
-          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-6">
-            <p className="text-yellow-800 dark:text-yellow-200 text-sm">
-              <FiKey className="inline mr-1" />
-              Press <kbd className="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded">Ctrl</kbd> + <kbd className="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded">M</kbd> for staff access
-            </p>
-          </div>
           
           <div className="text-xs text-gray-500 dark:text-gray-400 mt-8">
             <p>Thank you for your patience.</p>
