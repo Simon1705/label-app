@@ -42,7 +42,12 @@ export default function LabelingClient({ id }: LabelingClientProps) {
   const [selectedLabels, setSelectedLabels] = useState<Record<string, LabelOption>>({});
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [progress, setProgress] = useState({ completed: 0, total: 0, start_date: null as string | null });
+  const [progress, setProgress] = useState({ 
+    completed: 0, 
+    total: 0, 
+    start_date: null as string | null,
+    completed_date: null as string | null 
+  });
   const [filteredTotal, setFilteredTotal] = useState(0); // Total count with active filters
   const [entriesPerPage, setEntriesPerPage] = useState(10);
   const [completedEntries, setCompletedEntries] = useState<Set<string>>(new Set());
@@ -606,7 +611,8 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       setProgress({
         completed: progressRecord?.completed || 0,
         total: progressRecord?.total || 0,
-        start_date: progressRecord?.start_date || null
+        start_date: progressRecord?.start_date || null,
+        completed_date: progressRecord?.completed_date || null
       });
       setFilteredTotal(progressRecord?.total || 0);
       
@@ -915,6 +921,11 @@ export default function LabelingClient({ id }: LabelingClientProps) {
           if (!progress.start_date) {
             progressUpdate.start_date = new Date().toISOString();
           }
+          // Only set completed_date when the user first completes all labeling tasks
+          // and it hasn't been set before
+          if (newTotal === progress.total && progress.completed < progress.total && !progress.completed_date) {
+            progressUpdate.completed_date = new Date().toISOString();
+          }
         }
 
         const { error: progressError } = await supabase
@@ -932,7 +943,8 @@ export default function LabelingClient({ id }: LabelingClientProps) {
           ...prev, 
           ...progressUpdate,
           completed: progressUpdate.completed !== undefined ? progressUpdate.completed : prev.completed,
-          start_date: progressUpdate.start_date || prev.start_date
+          start_date: progressUpdate.start_date || prev.start_date,
+          completed_date: progressUpdate.completed_date || prev.completed_date
         }));
       }
       

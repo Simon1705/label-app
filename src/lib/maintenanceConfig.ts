@@ -1,6 +1,6 @@
 // Maintenance mode configuration
 // Set MAINTENANCE_MODE to true to enable maintenance mode
-export const MAINTENANCE_MODE = true;
+export const MAINTENANCE_MODE = false;
 
 // Access code for maintenance mode bypass
 export const ACCESS_CODE = 'admin123';

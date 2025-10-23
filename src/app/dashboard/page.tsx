@@ -118,11 +118,12 @@ export default function Dashboard() {
     try {
       setLoadingData(true);
       
-      // Fetch datasets owned by user (both active and inactive for owners)
+      // Fetch datasets owned by user (only active datasets for dashboard)
       const { data: ownedDatasets, error: ownedError } = await supabase
         .from('datasets')
         .select('*')
         .eq('owner_id', user?.id)
+        .eq('is_active', true) // Only show active datasets in dashboard
         .order('created_at', { ascending: false });
       
       if (ownedError) throw ownedError;
