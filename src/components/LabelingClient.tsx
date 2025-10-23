@@ -1995,12 +1995,6 @@ export default function LabelingClient({ id }: LabelingClientProps) {
         >
           <FiTag className="mr-2" /> Auto-Label by Score
         </Button>
-        <Button
-          onClick={autoLabelPageByText}
-          className="bg-purple-500 hover:bg-purple-600 text-white flex items-center justify-center"
-        >
-          <FiTag className="mr-2" /> Auto-Label by Text
-        </Button>
       </div>
       
       <div className="pb-24"></div>
