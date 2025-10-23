@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 import { User } from '@/types';
+import { useMaintenance } from './MaintenanceContext';
 
 type AuthContextType = {
   user: User | null;
@@ -21,6 +22,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const router = useRouter();
+  const { isMaintenanceMode, isAccessGranted } = useMaintenance();
 
   useEffect(() => {
     // Check for user in localStorage on mount
@@ -41,6 +43,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const login = async (username: string) => {
     try {
       setLoading(true);
+      
+      // Check if maintenance mode is active and user doesn't have access
+      if (isMaintenanceMode && !isAccessGranted) {
+        toast.error('Application is currently under maintenance. Please try again later.');
+        return;
+      }
       
       // Cari user berdasarkan username
       const { data, error } = await supabase
@@ -114,4 +122,4 @@ export const useAuth = () => {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
-}; 
+};
