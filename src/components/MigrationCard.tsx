@@ -51,13 +51,31 @@ export default function MigrationCard() {
       
       const result2 = await response2.json();
       
-      if (response2.ok && result2.success) {
+      if (!response2.ok || !result2.success) {
+        setMigrationStatus('error');
+        toast.error(result2.message || 'Second migration failed');
+        console.error('Second migration error:', result2.error);
+        return;
+      }
+      
+      // Call the migration API endpoint for user entry orders
+      const response3 = await fetch('/api/migrate-user-entry-orders', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      const result3 = await response3.json();
+      
+      if (response3.ok && result3.success) {
         setMigrationStatus('success');
         toast.success('All migrations completed successfully');
       } else {
         setMigrationStatus('error');
-        toast.error(result2.message || 'Second migration failed');
-        console.error('Second migration error:', result2.error);
+        toast.error(result3.message || 'Third migration failed');
+        console.error('Third migration error:', result3.error);
       }
     } catch (error) {
       console.error('Error running migration:', error);
@@ -91,13 +109,14 @@ export default function MigrationCard() {
           <ul className="list-disc list-inside text-sm text-gray-600 dark:text-gray-400 space-y-1 ml-2">
             <li>Date tracking for when users start and complete labeling tasks</li>
             <li>Active/inactive status for datasets</li>
+            <li>User-specific entry order for randomized labeling</li>
           </ul>
           
           {migrationStatus === 'success' && (
             <div className="mt-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800 rounded-md flex items-start">
               <FiCheck className="text-green-500 mr-2 mt-0.5 flex-shrink-0" />
               <p className="text-sm text-green-700 dark:text-green-300">
-                All migrations completed successfully. The dataset details page will now show start and completion dates for labelers, and admins can set datasets as active or inactive.
+                All migrations completed successfully. The dataset details page will now show start and completion dates for labelers, admins can set datasets as active or inactive, and users will see randomized entry orders when labeling.
               </p>
             </div>
           )}
@@ -131,4 +150,4 @@ export default function MigrationCard() {
       </CardFooter>
     </Card>
   );
-} 
+}

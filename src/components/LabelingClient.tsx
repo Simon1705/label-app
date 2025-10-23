@@ -51,6 +51,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
   const [debugMode, setDebugMode] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [entryOriginalOrder, setEntryOriginalOrder] = useState<Record<string, number>>({});
+  const [entryUserOrder, setEntryUserOrder] = useState<Record<string, number>>({}); // New state for user-specific order
   const [scoreFilters, setScoreFilters] = useState<('all' | '1' | '2' | '3' | '4' | '5')[]>(['all']);
   const [pendingScoreFilters, setPendingScoreFilters] = useState<('all' | '1' | '2' | '3' | '4' | '5')[]>(['all']);
   const [hasScoreColumn, setHasScoreColumn] = useState<boolean>(true); // Default to true, will be updated when dataset is loaded
@@ -73,6 +74,89 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       setIsAdmin(false);
     }
   }, [user?.id]);
+  
+  // Helper function to shuffle array (Fisher-Yates algorithm)
+  const shuffleArray = (array: any[]) => {
+    const newArray = [...array];
+    for (let i = newArray.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+    }
+    return newArray;
+  };
+
+  // Function to generate user-specific entry order (client-side only for now)
+  const generateUserEntryOrder = useCallback(async (entryIds: string[]) => {
+    if (!user?.id) {
+      // If no user ID, fallback to original order
+      const orderMap: Record<string, number> = {};
+      entryIds.forEach((entryId, index) => {
+        orderMap[entryId] = index;
+      });
+      return orderMap;
+    }
+
+    try {
+      console.log(`Generating user-specific order for ${entryIds.length} entries`);
+      
+      // Create a unique seed based on user ID and dataset ID
+      const seedString = `${user.id}-${id}`;
+      // Simple hash function to create a numeric seed
+      let seed = 0;
+      for (let i = 0; i < seedString.length; i++) {
+        seed = (seed * 31 + seedString.charCodeAt(i)) % 2147483647;
+      }
+      
+      // Seeded random shuffle function
+      const seededShuffle = (array: string[], seed: number) => {
+        const newArray = [...array];
+        // Seeded random number generator
+        const random = () => {
+          seed = (seed * 1664525 + 1013904223) % 2147483647;
+          return seed / 2147483647;
+        };
+        
+        // Fisher-Yates shuffle with seeded random
+        for (let i = newArray.length - 1; i > 0; i--) {
+          const j = Math.floor(random() * (i + 1));
+          [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+        }
+        return newArray;
+      };
+      
+      // Create a shuffled order based on the seed
+      const shuffledIds = seededShuffle(entryIds, seed);
+      
+      // Create mapping of entry ID to position
+      const orderMap: Record<string, number> = {};
+      shuffledIds.forEach((entryId, index) => {
+        orderMap[entryId] = index;
+      });
+      
+      console.log('User-specific entry order generated successfully (client-side)');
+      return orderMap;
+    } catch (error) {
+      console.error('Error generating user entry order:', error);
+      console.error('Error details:', error instanceof Error ? error.message : String(error));
+      // Fallback to original order
+      const orderMap: Record<string, number> = {};
+      entryIds.forEach((entryId, index) => {
+        orderMap[entryId] = index;
+      });
+      return orderMap;
+    }
+  }, [id, user?.id]);
+
+  // Effect to generate user-specific order when user becomes available
+  useEffect(() => {
+    if (user?.id && Object.keys(entryOriginalOrder).length > 0 && Object.keys(entryUserOrder).length === 0) {
+      // Generate user-specific order from the existing original order
+      const entryIds = Object.keys(entryOriginalOrder);
+      generateUserEntryOrder(entryIds).then(userOrder => {
+        setEntryUserOrder(userOrder);
+      });
+    }
+  }, [user?.id, entryOriginalOrder, entryUserOrder, generateUserEntryOrder]);
   
   // Helper function to process entry labels
   const processEntryLabels = useCallback(async (entryIds: string[], entries: any[]) => {
@@ -164,7 +248,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       console.log(`Fetching entries from ${start} to ${end}`);
       
       // First attempt to get ALL entry IDs to establish the master order if we don't have it yet
-      if (Object.keys(entryOriginalOrder).length === 0) {
+      if (Object.keys(entryOriginalOrder).length === 0 && user?.id) {
         try {
           console.log("Fetching all entry IDs to establish original order...");
           
@@ -188,7 +272,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
           query = query.order('id');
           
           const { data: allEntryIds, error: idsError } = await query;
-            
+        
           if (idsError) {
             console.error("Error fetching all entry IDs:", idsError);
             console.error("Error details:", JSON.stringify(idsError));
@@ -200,11 +284,18 @@ export default function LabelingClient({ id }: LabelingClientProps) {
               orderMap[entry.id] = index;
             });
             
-            console.log(`✅ Established order for ${allEntryIds.length} entries`);
+            console.log(`✅ Established original order for ${allEntryIds.length} entries`);
             setEntryOriginalOrder(orderMap);
+            
+            // Generate user-specific order only if we have a user
+            if (user?.id) {
+              const entryIds = allEntryIds.map(e => e.id);
+              const userOrder = await generateUserEntryOrder(entryIds);
+              setEntryUserOrder(userOrder);
+            }
           }
         } catch (orderError) {
-          console.error("Error establishing original order:", orderError);
+          console.error("Error establishing orders:", orderError);
           console.error("Full error:", orderError instanceof Error ? orderError.message : String(orderError));
           // Continue with the query even if this fails
         }
@@ -346,17 +437,29 @@ export default function LabelingClient({ id }: LabelingClientProps) {
         }
       }
       
-      // Sort entries based on original order if available
+      // Sort entries based on user-specific order if available, otherwise original order
       const sortedEntries = [...entriesData];
-      if (Object.keys(entryOriginalOrder).length > 0) {
-        sortedEntries.sort((a, b) => {
-          const orderA = entryOriginalOrder[a.id] ?? Number.MAX_SAFE_INTEGER;
-          const orderB = entryOriginalOrder[b.id] ?? Number.MAX_SAFE_INTEGER;
-          return orderA - orderB;
-        });
-        console.log("Entries sorted according to original order");
-      } else {
-        console.log("Using default order by ID (original order mapping not available)");
+      try {
+        if (Object.keys(entryUserOrder).length > 0) {
+          sortedEntries.sort((a, b) => {
+            const orderA = entryUserOrder[a.id] ?? Number.MAX_SAFE_INTEGER;
+            const orderB = entryUserOrder[b.id] ?? Number.MAX_SAFE_INTEGER;
+            return orderA - orderB;
+          });
+          console.log("Entries sorted according to user-specific order");
+        } else if (Object.keys(entryOriginalOrder).length > 0) {
+          sortedEntries.sort((a, b) => {
+            const orderA = entryOriginalOrder[a.id] ?? Number.MAX_SAFE_INTEGER;
+            const orderB = entryOriginalOrder[b.id] ?? Number.MAX_SAFE_INTEGER;
+            return orderA - orderB;
+          });
+          console.log("Entries sorted according to original order");
+        } else {
+          console.log("Using default order by ID");
+        }
+      } catch (sortError) {
+        console.error("Error sorting entries, falling back to default order:", sortError);
+        // If sorting fails for any reason, we continue with the default order
       }
       
       const entryIds = sortedEntries.map(e => e.id);
@@ -565,9 +668,47 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       fetchDatasetAndEntries();
     }
   }, [user, id, fetchDatasetAndEntries, checkAdminStatus]);
-  
 
+  // Effect to generate user-specific order when user becomes available
+  useEffect(() => {
+    if (user?.id && Object.keys(entryOriginalOrder).length > 0 && Object.keys(entryUserOrder).length === 0) {
+      // Generate user-specific order from the existing original order
+      const entryIds = Object.keys(entryOriginalOrder);
+      generateUserEntryOrder(entryIds).then(userOrder => {
+        setEntryUserOrder(userOrder);
+      }).catch(error => {
+        console.error('Failed to generate user entry order:', error);
+        // Even if generation fails, we continue with the original order
+      });
+    }
+  }, [user?.id, entryOriginalOrder, entryUserOrder, generateUserEntryOrder]);
   
+  // Function to refresh user-specific entry order
+  const refreshUserEntryOrder = useCallback(async () => {
+    if (!user?.id || Object.keys(entryOriginalOrder).length === 0) {
+      console.warn('Cannot refresh user entry order: missing user ID or original order');
+      return;
+    }
+    
+    try {
+      // Get entry IDs from original order
+      const entryIds = Object.keys(entryOriginalOrder);
+      
+      // Generate new shuffled order
+      const userOrder = await generateUserEntryOrder(entryIds);
+      setEntryUserOrder(userOrder);
+      
+      // Reload current page with new order
+      const currentPage = Math.floor(currentIndex / entriesPerPage);
+      await loadPageEntries(currentPage, entriesPerPage, scoreFilters);
+      
+      toast.success('Entry order refreshed successfully');
+    } catch (error) {
+      console.error('Error refreshing user entry order:', error);
+      toast.error('Failed to refresh entry order');
+    }
+  }, [user?.id, entryOriginalOrder, currentIndex, entriesPerPage, scoreFilters, generateUserEntryOrder, loadPageEntries]);
+
   // Update handlePageSelect to save the last page
   function handlePageSelect(pageNum: number) {
     if (pageNum === -1) return; // Skip separators
@@ -1325,6 +1466,14 @@ export default function LabelingClient({ id }: LabelingClientProps) {
             >
               Toggle Debug
             </Button>
+            {/* Add refresh button */}
+            <Button
+              variant="outline"
+              onClick={refreshUserEntryOrder}
+              className="w-full sm:w-auto flex items-center justify-center"
+            >
+              Refresh Entry Order
+            </Button>
           </div>
         </div>
       </motion.div>
@@ -1333,6 +1482,70 @@ export default function LabelingClient({ id }: LabelingClientProps) {
   
   const currentEntry = entries[currentIndex];
   const progressPercent = calculateProgress(progress.completed, progress.total);
+  
+  // Add refresh button to debug mode
+  if (debugMode) {
+    return (
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="max-w-6xl mx-auto py-16 px-4 text-center"
+      >
+        <div className="bg-gray-50 dark:bg-gray-800 rounded-xl shadow-md p-8 max-w-xl mx-auto">
+          <div className="w-16 h-16 mx-auto mb-6 flex items-center justify-center text-blue-500 bg-blue-100 dark:bg-blue-900/30 rounded-full">
+            <FiDatabase size={32} />
+          </div>
+          <h3 className="text-xl font-medium text-gray-900 dark:text-white mb-2">Debug Mode</h3>
+          <p className="text-gray-500 dark:text-gray-400 mb-6">
+            Debug information for labeling interface
+          </p>
+          <div className="text-left bg-gray-100 dark:bg-gray-900 p-4 rounded-lg mb-6 text-sm">
+            <div className="grid grid-cols-2 gap-2">
+              <div>Dataset ID:</div>
+              <div className="font-mono">{id}</div>
+              <div>User ID:</div>
+              <div className="font-mono">{user?.id}</div>
+              <div>Current Index:</div>
+              <div className="font-mono">{currentIndex}</div>
+              <div>Entries Per Page:</div>
+              <div className="font-mono">{entriesPerPage}</div>
+              <div>Total Entries:</div>
+              <div className="font-mono">{progress.total}</div>
+              <div>Filtered Total:</div>
+              <div className="font-mono">{filteredTotal}</div>
+              <div>Original Order Entries:</div>
+              <div className="font-mono">{Object.keys(entryOriginalOrder).length}</div>
+              <div>User Order Entries:</div>
+              <div className="font-mono">{Object.keys(entryUserOrder).length}</div>
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <Button 
+              onClick={() => router.push('/labeling')}
+              className="w-full sm:w-auto flex items-center justify-center"
+            >
+              <FiHome className="mr-2" /> Back to Dashboard
+            </Button>
+            <Button
+              variant="outline"
+              onClick={refreshUserEntryOrder}
+              className="w-full sm:w-auto flex items-center justify-center"
+            >
+              Refresh Entry Order
+            </Button>
+            <Button
+              variant="outline"
+              onClick={toggleDebugMode}
+              className="w-full sm:w-auto flex items-center justify-center"
+            >
+              Toggle Debug
+            </Button>
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
+
   const isEntryLabeled = currentEntry ? completedEntries.has(currentEntry.id) : false;
   
   return (

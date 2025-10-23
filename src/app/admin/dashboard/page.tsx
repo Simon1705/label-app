@@ -161,6 +161,9 @@ export default function AdminDashboard() {
         </div>
       </div>
       
+      {/* Add Migration Card */}
+      <MigrationCard />
+      
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card>
           <CardHeader>

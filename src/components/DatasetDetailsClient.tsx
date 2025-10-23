@@ -329,25 +329,56 @@ export default function DatasetDetailsClient({ id }: DatasetDetailsClientProps) 
         
         // Individual labeler columns are already added above
         
+        let majorityLabelValue: string | number = '';
+        
         if (entryLabels.length > 1) {
           row['consensus'] = labelValues.size === 1 ? 'YES' : 'NO';
           const majorityLabel = getMajorityLabel(entryLabels);
           const agreementCount = entryLabels.filter(l => l.label === majorityLabel).length;
           const agreementPercentage = Math.round((agreementCount / entryLabels.length) * 100);
           row['agreement_percentage'] = `${agreementPercentage}%`;
-          row['majority_label'] = exportFormat === 'numeric' 
+          majorityLabelValue = exportFormat === 'numeric' 
             ? convertLabelToNumeric(majorityLabel as LabelOption) 
             : majorityLabel;
+          row['majority_label'] = majorityLabelValue;
         } else if (entryLabels.length === 1) {
           row['consensus'] = 'SINGLE';
           row['agreement_percentage'] = '100%';
-          row['majority_label'] = exportFormat === 'numeric' 
+          majorityLabelValue = exportFormat === 'numeric' 
             ? convertLabelToNumeric(entryLabels[0].label as LabelOption) 
             : entryLabels[0].label;
+          row['majority_label'] = majorityLabelValue;
         } else {
           row['consensus'] = 'UNLABELED';
           row['agreement_percentage'] = '0%';
           row['majority_label'] = '';
+          majorityLabelValue = '';
+        }
+        
+        // Add final_sentiment column based on majority_label
+        if (majorityLabelValue !== '') {
+          if (exportFormat === 'numeric') {
+            // For numeric format: 1 = positive, 0 = neutral, -1 = negative
+            const numericValue = parseInt(String(majorityLabelValue));
+            switch (numericValue) {
+              case 1:
+                row['final_sentiment'] = 'positive';
+                break;
+              case 0:
+                row['final_sentiment'] = 'neutral';
+                break;
+              case -1:
+                row['final_sentiment'] = 'negative';
+                break;
+              default:
+                row['final_sentiment'] = 'neutral';
+            }
+          } else {
+            // For text format: directly use the label value
+            row['final_sentiment'] = majorityLabelValue;
+          }
+        } else {
+          row['final_sentiment'] = '';
         }
         
         return row;
@@ -371,8 +402,8 @@ export default function DatasetDetailsClient({ id }: DatasetDetailsClientProps) 
         const labelColumns = Array.from(allLabelColumns).sort();
         headers.push(...labelColumns);
         
-        // Add consensus columns
-        headers.push('consensus', 'agreement_percentage', 'majority_label');
+        // Add consensus columns and final_sentiment
+        headers.push('consensus', 'agreement_percentage', 'majority_label', 'final_sentiment');
         
         // Add any remaining columns
         const remainingColumns = Object.keys(csvRows[0]).filter(key => 
@@ -382,7 +413,8 @@ export default function DatasetDetailsClient({ id }: DatasetDetailsClientProps) 
           !key.startsWith('label_') && 
           key !== 'consensus' && 
           key !== 'agreement_percentage' && 
-          key !== 'majority_label'
+          key !== 'majority_label' && 
+          key !== 'final_sentiment'
         );
         headers.push(...remainingColumns);
       }
