@@ -72,8 +72,6 @@ export default function LoginPage() {
     setError('');
     try {
       await login(username);
-      // Remove maintenance bypass cookie after successful login
-      document.cookie = "maintenanceBypass=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
     } catch (err) {
       // Error toast is handled in the auth context
     }

@@ -1,4 +1,4 @@
-# Label App - Dataset Labeling Tool
+i# Label App - Dataset Labeling Tool
 
 Aplikasi web untuk memudahkan labeling dataset berupa ulasan dari suatu aplikasi. Dibuat dengan Next.js dan Supabase.
 
@@ -258,32 +258,12 @@ CREATE POLICY "Users can update their own progress" ON label_progress
 ```bash
 npm install
 ```
-3. Buat file `.env.local` di root folder dan tambahkan konfigurasi Supabase Anda:
-```env
-# Ganti dengan URL dan key dari project Supabase Anda
+3. Buat file `.env.local` di root folder dan tambahkan:
+```
 NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 SUPABASE_SERVICE_ROLE_KEY=your-supabase-service-role-key
-
-# Maintenance mode (opsional)
-NEXT_PUBLIC_MAINTENANCE_MODE=false
 ```
-
-Untuk mendapatkan nilai-nilai ini:
-1. Buka [Supabase Dashboard](https://supabase.com/dashboard)
-2. Pilih project Anda
-3. Di sidebar, klik "Project Settings" → "API"
-4. Salin "Project URL" dan "anon public" key
-5. Untuk service role key, klik "service_role" key dan salin nilainya
-
-Contoh konfigurasi yang benar:
-```env
-NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-NEXT_PUBLIC_MAINTENANCE_MODE=false
-```
-
 4. Jalankan aplikasi:
 ```bash
 npm run dev
