@@ -61,6 +61,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
   const [pendingScoreFilters, setPendingScoreFilters] = useState<('all' | '1' | '2' | '3' | '4' | '5')[]>(['all']);
   const [hasScoreColumn, setHasScoreColumn] = useState<boolean>(true); // Default to true, will be updated when dataset is loaded
   const [isAdmin, setIsAdmin] = useState(false); // Add isAdmin state
+  const [directPageInput, setDirectPageInput] = useState(''); // For direct page navigation input
   
   // Check if user is admin
   const checkAdminStatus = useCallback(async () => {
@@ -805,6 +806,39 @@ export default function LabelingClient({ id }: LabelingClientProps) {
         // Save the last page to the database
         updateLastPage(prevPage);
         
+      });
+    }
+  };
+  
+  // Function to handle direct page navigation
+  const handleDirectPageNavigation = () => {
+    const pageNum = parseInt(directPageInput);
+    if (isNaN(pageNum) || pageNum < 1) {
+      toast.error('Please enter a valid page number');
+      return;
+    }
+    
+    const totalPages = Math.ceil(filteredTotal / entriesPerPage);
+    if (pageNum > totalPages) {
+      toast.error(`Page number cannot exceed ${totalPages}`);
+      return;
+    }
+    
+    const newIndex = (pageNum - 1) * entriesPerPage;
+    if (newIndex >= 0 && newIndex < filteredTotal) {
+      if (newIndex === currentIndex) return;
+      
+      setLoading(true);
+      loadPageEntries(pageNum - 1, entriesPerPage, scoreFilters).then(() => {
+        setCurrentIndex(newIndex);
+        setSelectedLabels({});
+        // Save the current page to the database
+        updateLastPage(pageNum - 1);
+        // Clear the input after successful navigation
+        setDirectPageInput('');
+        setLoading(false);
+      }).catch(() => {
+        setLoading(false);
       });
     }
   };
@@ -1952,6 +1986,31 @@ export default function LabelingClient({ id }: LabelingClientProps) {
               Next <FiArrowRight className="ml-2" />
         </Button>
       </div>
+      
+      {/* Direct page navigation input */}
+      <div className="flex items-center ml-4">
+        <span className="text-gray-700 dark:text-gray-300 mr-2">Go to:</span>
+        <input
+          type="number"
+          min="1"
+          max={Math.ceil(filteredTotal / entriesPerPage)}
+          value={directPageInput}
+          onChange={(e) => setDirectPageInput(e.target.value)}
+          className="w-16 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-center bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              handleDirectPageNavigation();
+            }
+          }}
+        />
+        <Button
+          onClick={handleDirectPageNavigation}
+          className="ml-2 px-3 py-1 text-sm"
+          disabled={!directPageInput || parseInt(directPageInput) < 1 || parseInt(directPageInput) > Math.ceil(filteredTotal / entriesPerPage)}
+        >
+          Go
+        </Button>
+      </div>
           
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
@@ -1983,7 +2042,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
         </div>
       </motion.div>
       
-      {/* Sticky Auto-Label Buttons */}
+      {/* Sticky Auto-Label by Score Buttons */}
       <div 
         ref={stickyButtonsRef}
         className="fixed right-6 top-1/2 transform -translate-y-1/2 bg-white dark:bg-gray-800 rounded-lg shadow-xl p-4 border border-gray-200 dark:border-gray-700 z-40 flex flex-col space-y-3"
@@ -1994,6 +2053,12 @@ export default function LabelingClient({ id }: LabelingClientProps) {
           className="bg-blue-500 hover:bg-blue-600 text-white flex items-center justify-center"
         >
           <FiTag className="mr-2" /> Auto-Label by Score
+        </Button>
+        <Button
+          onClick={autoLabelPageByText}
+          className="bg-purple-500 hover:bg-purple-600 text-white flex items-center justify-center"
+        >
+          <FiTag className="mr-2" /> Auto-Label by Text
         </Button>
       </div>
       
