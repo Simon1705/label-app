@@ -1142,7 +1142,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
     }
   };
   
-  // Auto-label all entries on current page with specified label
+  {/* // Auto-label all entries on current page with specified label
   const autoLabelPage = (label: LabelOption) => {
     const newLabels: Record<string, LabelOption> = {};
     let count = 0;
@@ -1171,9 +1171,9 @@ export default function LabelingClient({ id }: LabelingClientProps) {
     } else {
       toast.success('No entries found on this page');
     }
-  };
+  }; */}
   
-  // Auto-label all entries on current page based on their scores
+  {/* // Auto-label all entries on current page based on their scores
   const autoLabelPageByScore = () => {
     const newLabels: Record<string, LabelOption> = {};
     let count = 0;
@@ -1221,9 +1221,9 @@ export default function LabelingClient({ id }: LabelingClientProps) {
     } else {
       toast.success('No entries needed auto-labeling');
     }
-  };
+  }; */}
   
-  // Auto-label all entries on current page based on text content analysis
+  {/* // Auto-label all entries on current page based on text content analysis
   const autoLabelPageByText = async () => {
     const newLabels: Record<string, LabelOption> = {};
     let count = 0;
@@ -1269,8 +1269,8 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       console.error('Error in text-based auto-labeling:', error);
       toast.error('Failed to auto-label entries based on text analysis');
     }
-  };
-  useEffect(() => {
+  }; */}
+  {/* useEffect(() => {
     // Buttons are always visible, no scroll handling needed
     if (stickyButtonsRef.current) {
       stickyButtonsRef.current.style.display = 'block';
@@ -1280,7 +1280,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       stickyButtonsRef.current.style.transform = 'translateY(-50%)';
       stickyButtonsRef.current.style.zIndex = '40';
     }
-  }, []);
+  }, []); */}
   
   // Cleanup localStorage when unmounting
   useEffect(() => {
@@ -2042,8 +2042,8 @@ export default function LabelingClient({ id }: LabelingClientProps) {
         </div>
       </motion.div>
       
-      {/* Sticky Auto-Label by Score Buttons */}
-      <div 
+      {/* Sticky Auto-Label by Score Buttons - Hidden as per user request */}
+      {/* <div 
         ref={stickyButtonsRef}
         className="fixed right-6 top-1/2 transform -translate-y-1/2 bg-white dark:bg-gray-800 rounded-lg shadow-xl p-4 border border-gray-200 dark:border-gray-700 z-40 flex flex-col space-y-3"
       >
@@ -2055,13 +2055,13 @@ export default function LabelingClient({ id }: LabelingClientProps) {
           <FiTag className="mr-2" /> Auto-Label by Score
         </Button>
 
-        {/* <Button
+        <Button
           onClick={autoLabelPageByText}
           className="bg-purple-500 hover:bg-purple-600 text-white flex items-center justify-center"
         >
           <FiTag className="mr-2" /> Auto-Label by Text
-        </Button> */}
-      </div>
+        </Button>
+      </div> */}
 
       <div className="pb-24"></div>
     </div>
