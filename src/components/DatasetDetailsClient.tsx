@@ -314,10 +314,10 @@ export default function DatasetDetailsClient({ id }: DatasetDetailsClientProps) 
           if (exportFormat === 'numeric') {
             let numericLabel: number;
             switch (label.label) {
-              case 'positive': numericLabel = 1; break;
-              case 'neutral': numericLabel = 0; break;
-              case 'negative': numericLabel = -1; break;
-              default: numericLabel = 0;
+              case 'positive': numericLabel = 2; break;
+              case 'neutral': numericLabel = 1; break;
+              case 'negative': numericLabel = 0; break;
+              default: numericLabel = 1;
             }
             row[`label_${username}`] = numericLabel;
             labelValues.add(String(numericLabel));
@@ -358,16 +358,16 @@ export default function DatasetDetailsClient({ id }: DatasetDetailsClientProps) 
         // Add final_sentiment column based on majority_label
         if (majorityLabelValue !== '') {
           if (exportFormat === 'numeric') {
-            // For numeric format: 1 = positive, 0 = neutral, -1 = negative
+            // For numeric format: 2 = positive, 1 = neutral, 0 = negative
             const numericValue = parseInt(String(majorityLabelValue));
             switch (numericValue) {
-              case 1:
+              case 2:
                 row['final_sentiment'] = 'positive';
                 break;
-              case 0:
+              case 1:
                 row['final_sentiment'] = 'neutral';
                 break;
-              case -1:
+              case 0:
                 row['final_sentiment'] = 'negative';
                 break;
               default:
@@ -479,10 +479,10 @@ export default function DatasetDetailsClient({ id }: DatasetDetailsClientProps) 
   
   const convertLabelToNumeric = (label: LabelOption): number => {
     switch (label) {
-      case 'positive': return 1;
-      case 'neutral': return 0;
-      case 'negative': return -1;
-      default: return 0;
+      case 'positive': return 2;
+      case 'neutral': return 1;
+      case 'negative': return 0;
+      default: return 1;
     }
   };
   
@@ -864,10 +864,10 @@ export default function DatasetDetailsClient({ id }: DatasetDetailsClientProps) 
                             )}></div>
                             <span className="font-medium text-gray-900 dark:text-gray-100">Numeric Values</span>
                           </div>
-                          <span className="text-sm text-gray-500 dark:text-gray-400">1, 0, -1</span>
+                          <span className="text-sm text-gray-500 dark:text-gray-400">2, 1, 0</span>
                         </div>
                         <p className="text-sm text-gray-600 dark:text-gray-400 mt-2 ml-6">
-                          Export labels as numbers (1 = positive, 0 = neutral, -1 = negative)
+                          Export labels as numbers (2 = positive, 1 = neutral, 0 = negative)
                         </p>
                       </div>
                     </div>
