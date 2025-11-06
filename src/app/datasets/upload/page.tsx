@@ -20,7 +20,6 @@ export default function UploadDataset() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [file, setFile] = useState<File | null>(null);
-  const [labelingType, setLabelingType] = useState<'binary' | 'multi_class'>('multi_class');
   const [isUploading, setIsUploading] = useState(false);
   const [errors, setErrors] = useState({
     name: '',
@@ -39,50 +38,40 @@ export default function UploadDataset() {
     setCsvValidationResult(null);
     
     if (!selectedFile) {
-      setFile(null);
       return;
     }
     
-    // Validate file type
-    if (selectedFile.type !== 'text/csv' && !selectedFile.name.endsWith('.csv')) {
-      setErrors({ ...errors, file: 'Please upload a CSV file' });
-      setFile(null);
+    if (!selectedFile.name.endsWith('.csv')) {
+      setErrors({ ...errors, file: 'File must be in CSV format' });
       return;
     }
     
     setFile(selectedFile);
-    
-    // Validate CSV content
-    Papa.parse(selectedFile, {
+    validateCsvFile(selectedFile);
+  };
+
+  const validateCsvFile = (csvFile: File) => {
+    Papa.parse(csvFile, {
       header: true,
       skipEmptyLines: true,
       complete: (results) => {
         const rows = results.data as any[];
-        
-        if (rows.length === 0) {
-          setCsvValidationResult({
-            isValid: false,
-            message: 'CSV file is empty',
-            totalRows: 0,
-          });
-          return;
-        }
-        
-        // Check required columns
+        const requiredColumns = ['text'];
         const headers = Object.keys(rows[0] || {});
-        const hasTextColumn = headers.includes('text');
         
-        if (!hasTextColumn) {
+        const missingColumns = requiredColumns.filter(col => !headers.includes(col));
+        
+        if (missingColumns.length > 0) {
           setCsvValidationResult({
             isValid: false,
-            message: 'CSV must contain a "text" column',
+            message: `CSV is missing required column: ${missingColumns.join(', ')}`,
             totalRows: 0,
           });
           return;
         }
         
-        // Check score column if it exists
         const hasScoreColumn = headers.includes('score');
+        
         if (hasScoreColumn) {
           const invalidScores = rows.some(row => {
             const score = parseInt(row.score);
@@ -158,7 +147,6 @@ export default function UploadDataset() {
           total_entries: csvValidationResult?.totalRows || 0,
           invite_code,
           is_active: true, // Default to active when creating a new dataset
-          labeling_type: labelingType, // Add labeling type
         })
         .select()
         .single();
@@ -281,10 +269,9 @@ export default function UploadDataset() {
         
         if (labelError) {
           console.error('Error inserting automatic labels:', labelError);
-          // Continue even if automatic labeling fails
         } else {
-          // Update progress for owner
-          const { error: progressUpdateError } = await supabase
+          // Update progress for automatically labeled entries for the owner
+          const { error: progressError } = await supabase
             .from('label_progress')
             .update({ 
               completed: negativeEntries.length,
@@ -293,22 +280,22 @@ export default function UploadDataset() {
             .eq('dataset_id', dataset.id)
             .eq('user_id', user?.id);
           
-          if (progressUpdateError) {
-            console.error('Error updating progress:', progressUpdateError);
+          if (progressError) {
+            console.error('Error updating progress for owner:', progressError);
           }
         }
       }
       
-      // Apply automatic labels to joined users (if any)
+      // Apply automatic labels for all users who have joined this dataset
       try {
-        // Get all users who have joined this dataset
+        // Find all users who have joined this dataset (excluding the owner)
         const { data: joinedUsers, error: usersError } = await supabase
           .from('label_progress')
           .select('user_id')
           .eq('dataset_id', dataset.id)
-          .neq('user_id', user?.id); // Exclude owner
+          .neq('user_id', user?.id);
         
-        // Get all entries with scores 1-2 for automatic labeling
+        // Find all entries with scores 1-2 (with pagination to get all entries)
         const allNegativeEntries = [];
         let continueFetching = true;
         let offset = 0;
@@ -465,42 +452,6 @@ export default function UploadDataset() {
                 placeholder="A short description of the dataset"
                 className="mt-1"
               />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Labeling Type
-              </label>
-              <div className="grid grid-cols-2 gap-4">
-                <button
-                  type="button"
-                  onClick={() => setLabelingType('multi_class')}
-                  className={`p-4 rounded-lg border-2 transition-all ${
-                    labelingType === 'multi_class'
-                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                      : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
-                  }`}
-                >
-                  <div className="font-medium text-gray-900 dark:text-white">Multi-Class</div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                    Positive, Neutral, Negative
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setLabelingType('binary')}
-                  className={`p-4 rounded-lg border-2 transition-all ${
-                    labelingType === 'binary'
-                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                      : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
-                  }`}
-                >
-                  <div className="font-medium text-gray-900 dark:text-white">Binary</div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                    Positive, Negative (No Neutral)
-                  </div>
-                </button>
-              </div>
             </div>
 
             <div>

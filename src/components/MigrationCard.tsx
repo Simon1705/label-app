@@ -5,43 +5,87 @@ import { FiDatabase, FiCheck, FiLoader, FiAlertCircle } from 'react-icons/fi';
 import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
 
-import { migrateLabelProgress } from '@/lib/runMigration';
-import { migrateDatasetActiveStatus } from '@/lib/migrateDatasetActiveStatus';
-import { runLabelingTypeMigration } from '@/lib/runLabelingTypeMigration';
-
 export default function MigrationCard() {
   const [isLoading, setIsLoading] = useState(false);
-  const [migrationStatus, setMigrationStatus] = useState<'idle' | 'running' | 'success' | 'error'>('idle');
+  const [migrationStatus, setMigrationStatus] = useState<'idle' | 'success' | 'error'>('idle');
   
-  const runMigrations = async () => {
-    setMigrationStatus('running');
-    
+  const runMigration = async () => {
     try {
-      // Run label progress migration
-      const labelProgressResult = await migrateLabelProgress();
-      if (!labelProgressResult.success) {
-        throw new Error('Label progress migration failed');
+      setIsLoading(true);
+      setMigrationStatus('idle');
+      
+      // Get the session token
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        toast.error('You must be logged in as an admin to run migrations');
+        return;
       }
       
-      // Run dataset active status migration
-      const activeStatusResult = await migrateDatasetActiveStatus();
-      if (!activeStatusResult.success) {
-        throw new Error('Dataset active status migration failed');
+      // Call the migration API endpoint for label progress
+      const response1 = await fetch('/api/migrate-label-progress', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      const result1 = await response1.json();
+      
+      if (!response1.ok || !result1.success) {
+        setMigrationStatus('error');
+        toast.error(result1.message || 'First migration failed');
+        console.error('First migration error:', result1.error);
+        return;
       }
       
-      // Run labeling type migration
-      const labelingTypeResult = await runLabelingTypeMigration();
-      if (!labelingTypeResult.success) {
-        throw new Error('Labeling type migration failed');
+      // Call the migration API endpoint for dataset active status
+      const response2 = await fetch('/api/migrate-dataset-active-status', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      const result2 = await response2.json();
+      
+      if (!response2.ok || !result2.success) {
+        setMigrationStatus('error');
+        toast.error(result2.message || 'Second migration failed');
+        console.error('Second migration error:', result2.error);
+        return;
       }
       
-      setMigrationStatus('success');
+      // Call the migration API endpoint for user entry orders
+      const response3 = await fetch('/api/migrate-user-entry-orders', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      const result3 = await response3.json();
+      
+      if (response3.ok && result3.success) {
+        setMigrationStatus('success');
+        toast.success('All migrations completed successfully');
+      } else {
+        setMigrationStatus('error');
+        toast.error(result3.message || 'Third migration failed');
+        console.error('Third migration error:', result3.error);
+      }
     } catch (error) {
-      console.error('Migration error:', error);
+      console.error('Error running migration:', error);
       setMigrationStatus('error');
+      toast.error('An unexpected error occurred');
+    } finally {
+      setIsLoading(false);
     }
   };
-
+  
   return (
     <Card className="overflow-hidden border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all">
       <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 to-purple-500"></div>
@@ -66,7 +110,6 @@ export default function MigrationCard() {
             <li>Date tracking for when users start and complete labeling tasks</li>
             <li>Active/inactive status for datasets</li>
             <li>User-specific entry order for randomized labeling</li>
-            <li>Binary/Multi-class labeling type for datasets</li>
           </ul>
           
           {migrationStatus === 'success' && (
@@ -90,7 +133,7 @@ export default function MigrationCard() {
       </CardContent>
       <CardFooter className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
         <Button
-          onClick={runMigrations}
+          onClick={runMigration}
           disabled={isLoading}
           className="bg-indigo-600 hover:bg-indigo-700 text-white"
         >

@@ -15,7 +15,6 @@ export interface Dataset {
   created_at: string;
   file_path?: string;
   is_active?: boolean;
-  labeling_type?: 'binary' | 'multi_class';
 }
 
 export type DatasetEntry = {
@@ -42,7 +41,6 @@ export type LabelProgress = {
   start_date?: string;
   completed_date?: string;
   last_updated?: string;
-  last_labeled_page?: number; // Add this field to track the last labeled page
 };
 
-export type LabelOption = 'positive' | 'negative' | 'neutral';
+export type LabelOption = 'positive' | 'negative' | 'neutral'; 

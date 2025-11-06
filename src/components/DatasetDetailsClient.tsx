@@ -46,15 +46,6 @@ export default function DatasetDetailsClient({ id }: DatasetDetailsClientProps) 
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [showExportOptions, setShowExportOptions] = useState(false);
   const [exportFormat, setExportFormat] = useState<'text' | 'numeric'>('text');
-  const [exportColumns, setExportColumns] = useState<Record<string, boolean>>({
-    text: true,
-    final_sentiment: true,
-    score: false,
-    labelers: false,
-    consensus: false,
-    agreement_percentage: false,
-    majority_label: false
-  });
   
   const checkUserJoinedDataset = useCallback(async (datasetId: string, userId: string | undefined) => {
     if (!userId) return false;
@@ -240,116 +231,80 @@ export default function DatasetDetailsClient({ id }: DatasetDetailsClientProps) 
     }
   };
   
-  const handleExport = async () => {
+  const exportDataset = async () => {
     try {
       setExportLoading(true);
       
-      // Fetch all entries using pagination to avoid limit issues
-      let allEntries: any[] = [];
-      let entriesError: any = null;
-      let currentRangeStart = 0;
-      const batchSize = 1000;
+      // Fetch all entries with pagination
+      const entries: any[] = [];
+      let continueFetchingEntries = true;
+      let offsetEntries = 0;
+      const limitEntries = 1000;
       
-      while (true) {
-        const { data: batchEntries, error: batchError } = await supabase
+      while (continueFetchingEntries) {
+        const { data: batch, error: entriesError } = await supabase
           .from('dataset_entries')
           .select('*')
           .eq('dataset_id', id)
-          .range(currentRangeStart, currentRangeStart + batchSize - 1);
+          .range(offsetEntries, offsetEntries + limitEntries - 1);
         
-        if (batchError) {
-          entriesError = batchError;
-          break;
+        if (entriesError) throw entriesError;
+        
+        if (batch && batch.length > 0) {
+          entries.push(...batch);
+          // If we got less than the limit, we've fetched all entries
+          if (batch.length < limitEntries) {
+            continueFetchingEntries = false;
+          } else {
+            offsetEntries += limitEntries;
+          }
+        } else {
+          continueFetchingEntries = false;
         }
-        
-        if (!batchEntries || batchEntries.length === 0) {
-          break;
-        }
-        
-        allEntries = [...allEntries, ...batchEntries];
-        
-        // If we got less than the batch size, we've reached the end
-        if (batchEntries.length < batchSize) {
-          break;
-        }
-        
-        currentRangeStart += batchSize;
       }
       
-      if (entriesError) throw entriesError;
+      // Fetch all labels with pagination
+      const labels: any[] = [];
+      let continueFetchingLabels = true;
+      let offsetLabels = 0;
+      const limitLabels = 1000;
       
-      const entries = allEntries;
-      
-      // Fetch all labels for this dataset using pagination
-      let allLabels: any[] = [];
-      let labelsError: any = null;
-      let currentLabelRangeStart = 0;
-      const labelBatchSize = 1000;
-      
-      while (true) {
-        const { data: batchLabels, error: batchError } = await supabase
+      while (continueFetchingLabels) {
+        const { data: batch, error: labelsError } = await supabase
           .from('dataset_labels')
           .select('*')
           .eq('dataset_id', id)
-          .range(currentLabelRangeStart, currentLabelRangeStart + labelBatchSize - 1);
+          .range(offsetLabels, offsetLabels + limitLabels - 1);
         
-        if (batchError) {
-          labelsError = batchError;
-          break;
+        if (labelsError) throw labelsError;
+        
+        if (batch && batch.length > 0) {
+          labels.push(...batch);
+          // If we got less than the limit, we've fetched all labels
+          if (batch.length < limitLabels) {
+            continueFetchingLabels = false;
+          } else {
+            offsetLabels += limitLabels;
+          }
+        } else {
+          continueFetchingLabels = false;
         }
-        
-        if (!batchLabels || batchLabels.length === 0) {
-          break;
-        }
-        
-        allLabels = [...allLabels, ...batchLabels];
-        
-        // If we got less than the batch size, we've reached the end
-        if (batchLabels.length < labelBatchSize) {
-          break;
-        }
-        
-        currentLabelRangeStart += labelBatchSize;
       }
       
-      if (labelsError) throw labelsError;
-      
-      const labels = allLabels;
-      
-      // Fetch all users who labeled this dataset using pagination if needed
-      const userIds = [...new Set(labels.map(label => label.user_id))];
+      const userIds = [...new Set(labels?.map(l => l.user_id) || [])];
       let usersData: Record<string, User> = {};
       
       if (userIds.length > 0) {
-        // Split userIds into batches to avoid query limits
-        const userBatchSize = 100;
-        let allUsers: User[] = [];
-        
-        for (let i = 0; i < userIds.length; i += userBatchSize) {
-          const batchUserIds = userIds.slice(i, i + userBatchSize);
-          const { data: users, error: usersError } = await supabase
-            .from('users')
-            .select('*')
-            .in('id', batchUserIds);
-          
-          if (usersError) throw usersError;
-          
-          if (users) {
-            allUsers = [...allUsers, ...users];
-          }
-        }
-        
-        usersData = allUsers.reduce<Record<string, User>>((acc, user) => {
+        const { data: users, error: usersError } = await supabase.from('users').select('*').in('id', userIds);
+        if (usersError) throw usersError;
+        usersData = (users || []).reduce<Record<string, User>>((acc, user) => {
           acc[user.id] = user;
           return acc;
         }, {});
       }
       
-      // Filter out 'delete' labels for all exports
-      const filteredLabels = labels.filter(label => label.label !== 'delete');
-      
       const csvRows = entries?.map((entry, index) => {
-        const entryLabels = filteredLabels.filter(l => l.entry_id === entry.id) || [];
+        const entryLabels = labels.filter(l => l.entry_id === entry.id) || [];
         const row: Record<string, any> = { text: entry.text, score: entry.score };
         const labelValues = new Set<string>();
         
@@ -358,21 +313,11 @@ export default function DatasetDetailsClient({ id }: DatasetDetailsClientProps) 
           const username = usersData[label.user_id]?.username || 'unknown';
           if (exportFormat === 'numeric') {
             let numericLabel: number;
-            if (dataset?.labeling_type === 'binary') {
-              // For binary datasets: 1 = positive, 0 = negative
-              switch (label.label) {
-                case 'positive': numericLabel = 1; break;
-                case 'negative': numericLabel = 0; break;
-                default: numericLabel = 0; // neutral should not occur in binary datasets
-              }
-            } else {
-              // For multi-class datasets: 2 = positive, 1 = neutral, 0 = negative
-              switch (label.label) {
-                case 'positive': numericLabel = 2; break;
-                case 'neutral': numericLabel = 1; break;
-                case 'negative': numericLabel = 0; break;
-                default: numericLabel = 1;
-              }
+            switch (label.label) {
+              case 'positive': numericLabel = 2; break;
+              case 'neutral': numericLabel = 1; break;
+              case 'negative': numericLabel = 0; break;
+              default: numericLabel = 1;
             }
             row[`label_${username}`] = numericLabel;
             labelValues.add(String(numericLabel));
@@ -393,14 +338,14 @@ export default function DatasetDetailsClient({ id }: DatasetDetailsClientProps) 
           const agreementPercentage = Math.round((agreementCount / entryLabels.length) * 100);
           row['agreement_percentage'] = `${agreementPercentage}%`;
           majorityLabelValue = exportFormat === 'numeric' 
-            ? convertLabelToNumeric(majorityLabel as LabelOption, dataset?.labeling_type === 'binary') 
+            ? convertLabelToNumeric(majorityLabel as LabelOption) 
             : majorityLabel;
           row['majority_label'] = majorityLabelValue;
         } else if (entryLabels.length === 1) {
           row['consensus'] = 'SINGLE';
           row['agreement_percentage'] = '100%';
           majorityLabelValue = exportFormat === 'numeric' 
-            ? convertLabelToNumeric(entryLabels[0].label as LabelOption, dataset?.labeling_type === 'binary') 
+            ? convertLabelToNumeric(entryLabels[0].label as LabelOption) 
             : entryLabels[0].label;
           row['majority_label'] = majorityLabelValue;
         } else {
@@ -413,27 +358,24 @@ export default function DatasetDetailsClient({ id }: DatasetDetailsClientProps) 
         // Add final_sentiment column based on majority_label
         if (majorityLabelValue !== '') {
           if (exportFormat === 'numeric') {
-            // For numeric format: directly use the numeric value
-            row['final_sentiment'] = majorityLabelValue;
-          } else {
-            // For text format: convert numeric back to text or use directly
-            if (typeof majorityLabelValue === 'number') {
-              switch (majorityLabelValue) {
-                case 2:
-                  row['final_sentiment'] = 'positive';
-                  break;
-                case 1:
-                  row['final_sentiment'] = 'neutral';
-                  break;
-                case 0:
-                  row['final_sentiment'] = 'negative';
-                  break;
-                default:
-                  row['final_sentiment'] = 'neutral';
-              }
-            } else {
-              row['final_sentiment'] = majorityLabelValue;
+            // For numeric format: 2 = positive, 1 = neutral, 0 = negative
+            const numericValue = parseInt(String(majorityLabelValue));
+            switch (numericValue) {
+              case 2:
+                row['final_sentiment'] = 'positive';
+                break;
+              case 1:
+                row['final_sentiment'] = 'neutral';
+                break;
+              case 0:
+                row['final_sentiment'] = 'negative';
+                break;
+              default:
+                row['final_sentiment'] = 'neutral';
             }
+          } else {
+            // For text format: directly use the label value
+            row['final_sentiment'] = majorityLabelValue;
           }
         } else {
           row['final_sentiment'] = '';
@@ -445,128 +387,59 @@ export default function DatasetDetailsClient({ id }: DatasetDetailsClientProps) 
       // Create headers in a specific order to ensure consistency
       let headers: string[] = [];
       if (csvRows && csvRows.length > 0) {
-        // Filter headers based on selected export columns
-        const allPossibleHeaders = [
-          'text',
-          'score',
-          ...Array.from(new Set(csvRows.flatMap(row => Object.keys(row).filter(key => key.startsWith('label_'))))).sort(),
-          'consensus',
-          'agreement_percentage',
-          'majority_label',
-          'final_sentiment'
-        ];
+        // Start with required columns
+        headers = ['text', 'score'];
         
-        // Only include headers that are selected for export
-        headers = allPossibleHeaders.filter(header => {
-          if (header === 'text' || header === 'score') {
-            return exportColumns[header] || false;
-          } else if (header.startsWith('label_')) {
-            return exportColumns['labelers'];
-          } else {
-            return exportColumns[header] || false;
-          }
-        });
-        
-        // If no headers are selected, include the default ones
-        if (headers.length === 0) {
-          headers = ['text', 'final_sentiment'];
-        }
-      }
-      
-      // For binary datasets, ensure proper handling of final_sentiment
-      if (dataset?.labeling_type === 'binary') {
-        csvRows?.forEach(row => {
-          // Ensure final_sentiment is properly converted for binary datasets
-          if (exportFormat === 'numeric' && typeof row['final_sentiment'] === 'string') {
-            switch (row['final_sentiment']) {
-              case 'positive':
-                row['final_sentiment'] = 1;
-                break;
-              case 'negative':
-                row['final_sentiment'] = 0;
-                break;
-              default:
-                // For binary datasets, neutral should be treated as empty
-                row['final_sentiment'] = '';
-                break;
+        // Collect all label columns from all rows (in case different rows have different labelers)
+        const allLabelColumns = new Set<string>();
+        csvRows.forEach(row => {
+          Object.keys(row).forEach(key => {
+            if (key.startsWith('label_')) {
+              allLabelColumns.add(key);
             }
-          } else if (exportFormat === 'text' && typeof row['final_sentiment'] === 'number') {
-            switch (row['final_sentiment']) {
-              case 1:
-                row['final_sentiment'] = 'positive';
-                break;
-              case 0:
-                row['final_sentiment'] = 'negative';
-                break;
-              default:
-                row['final_sentiment'] = '';
-                break;
-            }
-          }
+          });
         });
+        const labelColumns = Array.from(allLabelColumns).sort();
+        headers.push(...labelColumns);
+        
+        // Add consensus columns and final_sentiment
+        headers.push('consensus', 'agreement_percentage', 'majority_label', 'final_sentiment');
+        
+        // Add any remaining columns
+        const remainingColumns = Object.keys(csvRows[0]).filter(key => 
+          !headers.includes(key) && 
+          key !== 'text' && 
+          key !== 'score' && 
+          !key.startsWith('label_') && 
+          key !== 'consensus' && 
+          key !== 'agreement_percentage' && 
+          key !== 'majority_label' && 
+          key !== 'final_sentiment'
+        );
+        headers.push(...remainingColumns);
       }
+      const csvContent = [
+        headers.join(','),
+        ...csvRows?.map(row => 
+          headers.map(header => {
+            const value = row[header];
+            if (exportFormat === 'numeric' && header.startsWith('label_') && value === 0) return '0';
+            if (value === null || value === undefined) return '';
+            if (typeof value === 'string') return `"${value.replace(/"/g, '""')}"`;
+            return String(value);
+          }).join(',')
+        ) || []
+      ].join('\n');
       
-      // For binary datasets, filter out neutral labels from the export
-      if (dataset?.labeling_type === 'binary') {
-        // For binary datasets, we want to include all rows that have been labeled
-        // We don't need to filter out rows as we're ensuring only positive/negative labels are used
-        const binaryFilteredRows = csvRows || [];
-        
-        // Update the CSV content with filtered rows
-        const csvContent = [
-          headers.join(','),
-          ...binaryFilteredRows.map(row => 
-            headers.map(header => {
-              const value = row[header];
-              if (value === null || value === undefined) return '';
-              // For numeric values, we want to preserve the actual numeric value
-              if (typeof value === 'number') return value.toString();
-              if (typeof value === 'string') return `"${value.replace(/"/g, '""')}"`;
-              return String(value);
-            }).join(',')
-          ) || []
-        ].join('\n');
-        
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.setAttribute('href', url);
-        const formatSuffix = exportFormat === 'numeric' ? '_numeric' : '_text';
-        const labelingType = dataset?.labeling_type ?? 'multi_class';
-        const typeSuffix = (labelingType as string) === 'binary' ? '_binary' : '_multiclass';
-        link.setAttribute('download', `${dataset?.name || 'dataset'}_labeled${formatSuffix}${typeSuffix}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      } else {
-        // For multi-class datasets, use the original export logic
-        const csvContent = [
-          headers.join(','),
-          ...csvRows?.map(row => 
-            headers.map(header => {
-              const value = row[header];
-              // Remove the special handling for 0 values to properly handle numeric export
-              if (value === null || value === undefined) return '';
-              // For numeric values, we want to preserve the actual numeric value
-              if (typeof value === 'number') return value.toString();
-              if (typeof value === 'string') return `"${value.replace(/"/g, '""')}"`;
-              return String(value);
-            }).join(',')
-          ) || []
-        ].join('\n');
-        
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.setAttribute('href', url);
-        const formatSuffix = exportFormat === 'numeric' ? '_numeric' : '_text';
-        const labelingType = dataset?.labeling_type ?? 'multi_class';
-        const typeSuffix = (labelingType as string) === 'binary' ? '_binary' : '_multiclass';
-        link.setAttribute('download', `${dataset?.name || 'dataset'}_labeled${formatSuffix}${typeSuffix}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      }
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      const formatSuffix = exportFormat === 'numeric' ? '_numeric' : '_text';
+      link.setAttribute('download', `${dataset?.name || 'dataset'}_labeled${formatSuffix}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
       
       toast.success('Dataset exported successfully');
       setShowExportOptions(false);
@@ -604,22 +477,12 @@ export default function DatasetDetailsClient({ id }: DatasetDetailsClientProps) 
     return majorityLabel;
   };
   
-  const convertLabelToNumeric = (label: LabelOption, isBinary: boolean = false): number => {
-    if (isBinary) {
-      // For binary datasets: 1 = positive, 0 = negative
-      switch (label) {
-        case 'positive': return 1;
-        case 'negative': return 0;
-        default: return 0; // neutral should not occur in binary datasets, but default to 0
-      }
-    } else {
-      // For multi-class datasets: 2 = positive, 1 = neutral, 0 = negative
-      switch (label) {
-        case 'positive': return 2;
-        case 'neutral': return 1;
-        case 'negative': return 0;
-        default: return 1;
-      }
+  const convertLabelToNumeric = (label: LabelOption): number => {
+    switch (label) {
+      case 'positive': return 2;
+      case 'neutral': return 1;
+      case 'negative': return 0;
+      default: return 1;
     }
   };
   
@@ -932,7 +795,7 @@ export default function DatasetDetailsClient({ id }: DatasetDetailsClientProps) 
             <motion.div
               initial={{ y: 20 }}
               animate={{ y: 0 }}
-              className="w-full max-w-4xl"
+              className="w-full max-w-md"
             >
               <Card className="border-2 border-blue-200 dark:border-blue-800 bg-white dark:bg-gray-900 shadow-xl">
                 <div className="absolute top-0 left-0 w-full h-1 bg-blue-500"></div>
@@ -946,7 +809,7 @@ export default function DatasetDetailsClient({ id }: DatasetDetailsClientProps) 
                         Export Options
                       </CardTitle>
                       <CardDescription className="text-blue-600/80 dark:text-blue-400/80">
-                        Choose the format and columns for your export
+                        Choose the format for label values
                       </CardDescription>
                     </div>
                   </div>
@@ -956,243 +819,56 @@ export default function DatasetDetailsClient({ id }: DatasetDetailsClientProps) 
                     <p className="text-gray-700 dark:text-gray-300">
                       Select how you want the sentiment labels to appear in the exported CSV:
                     </p>
-                    
-                    {/* Display dataset labeling type */}
-                    <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                      <div className="flex items-center">
-                        <FiInfo className="text-blue-500 mr-2 flex-shrink-0" />
-                        <div>
-                          <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
-                            Dataset Type: {dataset?.labeling_type === 'binary' ? 'Binary' : 'Multi-Class'}
-                          </p>
-                          <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
-                            {dataset?.labeling_type === 'binary' 
-                              ? 'This dataset uses binary labeling (positive, negative) without neutral options.' 
-                              : 'This dataset uses multi-class labeling (positive, neutral, negative).'}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-[35%_65%] gap-6">
-                      {/* Left Column - Format Selection */}
-                      <div>
-                        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-3">Label Format</h3>
-                        <div className="space-y-3">
-                          <div 
-                            className={cn(
-                              "border-2 rounded-lg p-4 cursor-pointer transition-all",
+                    <div className="grid grid-cols-1 gap-3">
+                      <div 
+                        className={cn(
+                          "border-2 rounded-lg p-4 cursor-pointer transition-all",
+                          exportFormat === 'text' 
+                            ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20" 
+                            : "border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-700"
+                        )}
+                        onClick={() => setExportFormat('text')}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <div className={cn(
+                              "w-4 h-4 rounded-full border-2",
                               exportFormat === 'text' 
-                                ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20" 
-                                : "border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-700"
-                            )}
-                            onClick={() => setExportFormat('text')}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center space-x-2">
-                                <div className={cn(
-                                  "w-4 h-4 rounded-full border-2",
-                                  exportFormat === 'text' 
-                                    ? "border-blue-500 bg-blue-500" 
-                                    : "border-gray-400 dark:border-gray-600"
-                                )}></div>
-                                <span className="font-medium text-gray-900 dark:text-gray-100">Text Labels</span>
-                              </div>
-                              {dataset?.labeling_type === 'binary' ? (
-                                <span className="text-sm text-gray-500 dark:text-gray-400">positive, negative</span>
-                              ) : (
-                                <span className="text-sm text-gray-500 dark:text-gray-400">positive, neutral, negative</span>
-                              )}
-                            </div>
-                            <p className="text-sm text-gray-600 dark:text-gray-400 mt-2 ml-6">
-                              Export labels as human-readable text values
-                            </p>
+                                ? "border-blue-500 bg-blue-500" 
+                                : "border-gray-400 dark:border-gray-600"
+                            )}></div>
+                            <span className="font-medium text-gray-900 dark:text-gray-100">Text Labels</span>
                           </div>
-                          <div 
-                            className={cn(
-                              "border-2 rounded-lg p-4 cursor-pointer transition-all",
-                              exportFormat === 'numeric' 
-                                ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20" 
-                                : "border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-700"
-                            )}
-                            onClick={() => setExportFormat('numeric')}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center space-x-2">
-                                <div className={cn(
-                                  "w-4 h-4 rounded-full border-2",
-                                  exportFormat === 'numeric' 
-                                    ? "border-blue-500 bg-blue-500" 
-                                    : "border-gray-400 dark:border-gray-600"
-                                )}></div>
-                                <span className="font-medium text-gray-900 dark:text-gray-100">Numeric Values</span>
-                              </div>
-                              {dataset?.labeling_type === 'binary' ? (
-                                <span className="text-sm text-gray-500 dark:text-gray-400">1, 0</span>
-                              ) : (
-                                <span className="text-sm text-gray-500 dark:text-gray-400">2, 1, 0</span>
-                              )}
-                            </div>
-                            <p className="text-sm text-gray-600 dark:text-gray-400 mt-2 ml-6">
-                              {dataset?.labeling_type === 'binary' ? (
-                                "Export labels as numbers (1 = positive, 0 = negative)"
-                              ) : (
-                                "Export labels as numbers (2 = positive, 1 = neutral, 0 = negative)"
-                              )}
-                            </p>
-                          </div>
+                          <span className="text-sm text-gray-500 dark:text-gray-400">positive, neutral, negative</span>
                         </div>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-2 ml-6">
+                          Export labels as human-readable text values
+                        </p>
                       </div>
-                      
-                      {/* Right Column - Column Selection */}
-                      <div>
-                        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-3">Select Columns to Export</h3>
-                        <div className="grid grid-cols-1 gap-3 max-h-96 overflow-y-auto pr-2">
-                          {/* Default Columns with single border */}
-                          <div>
-                            <div className="px-3 py-2 bg-blue-100 dark:bg-blue-800/30 border border-blue-300 dark:border-blue-700 rounded-t-lg">
-                              <span className="text-xs font-medium text-blue-800 dark:text-blue-200">
-                                Default Columns
-                              </span>
-                            </div>
-                            <div className="border-2 border-blue-500 rounded-b-lg bg-blue-50 dark:bg-blue-900/20">
-                              <div className="p-3">
-                                <div className="flex items-start">
-                                  <input
-                                    type="checkbox"
-                                    id="text-column"
-                                    checked={exportColumns.text}
-                                    onChange={(e) => setExportColumns(prev => ({ ...prev, text: e.target.checked }))}
-                                    className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mt-1 flex-shrink-0"
-                                  />
-                                  <div className="ml-3">
-                                    <label htmlFor="text-column" className="block text-sm font-medium text-gray-900 dark:text-gray-100">
-                                      Text
-                                    </label>
-                                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                                      The original text content
-                                    </p>
-                                  </div>
-                                </div>
-                                <div className="flex items-start mt-2">
-                                  <input
-                                    type="checkbox"
-                                    id="final_sentiment-column"
-                                    checked={exportColumns.final_sentiment}
-                                    onChange={(e) => setExportColumns(prev => ({ ...prev, final_sentiment: e.target.checked }))}
-                                    className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mt-1 flex-shrink-0"
-                                  />
-                                  <div className="ml-3">
-                                    <label htmlFor="final_sentiment-column" className="block text-sm font-medium text-gray-900 dark:text-gray-100">
-                                      Final Sentiment
-                                    </label>
-                                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                                      The consensus label from all labelers
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
+                      <div 
+                        className={cn(
+                          "border-2 rounded-lg p-4 cursor-pointer transition-all",
+                          exportFormat === 'numeric' 
+                            ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20" 
+                            : "border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-700"
+                        )}
+                        onClick={() => setExportFormat('numeric')}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <div className={cn(
+                              "w-4 h-4 rounded-full border-2",
+                              exportFormat === 'numeric' 
+                                ? "border-blue-500 bg-blue-500" 
+                                : "border-gray-400 dark:border-gray-600"
+                            )}></div>
+                            <span className="font-medium text-gray-900 dark:text-gray-100">Numeric Values</span>
                           </div>
-                          
-                          {/* Other Columns with single border and information */}
-                          <div>
-                            <div className="px-3 py-2 bg-gray-100 dark:bg-gray-800/50 border border-gray-300 dark:border-gray-600 rounded-t-lg">
-                              <span className="text-xs font-medium text-gray-600 dark:text-gray-300">
-                                Additional Columns (for datasets labeled by one or more persons)
-                              </span>
-                            </div>
-                            <div className="border border-gray-200 dark:border-gray-700 rounded-b-lg hover:border-gray-300 dark:hover:border-gray-600">
-                              <div className="p-3">
-                                <div className="flex items-start">
-                                  <input
-                                    type="checkbox"
-                                    id="score-column"
-                                    checked={exportColumns.score}
-                                    onChange={(e) => setExportColumns(prev => ({ ...prev, score: e.target.checked }))}
-                                    className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mt-1 flex-shrink-0"
-                                  />
-                                  <div className="ml-3">
-                                    <label htmlFor="score-column" className="block text-sm font-medium text-gray-900 dark:text-gray-100">
-                                      Score
-                                    </label>
-                                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                                      The original score (1-5) from the dataset
-                                    </p>
-                                  </div>
-                                </div>
-                                <div className="flex items-start mt-2">
-                                  <input
-                                    type="checkbox"
-                                    id="labelers-column"
-                                    checked={exportColumns.labelers}
-                                    onChange={(e) => setExportColumns(prev => ({ ...prev, labelers: e.target.checked }))}
-                                    className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mt-1 flex-shrink-0"
-                                  />
-                                  <div className="ml-3">
-                                    <label htmlFor="labelers-column" className="block text-sm font-medium text-gray-900 dark:text-gray-100">
-                                      Labelers
-                                    </label>
-                                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                                      Individual labels from each labeler (label_username)
-                                    </p>
-                                  </div>
-                                </div>
-                                <div className="flex items-start mt-2">
-                                  <input
-                                    type="checkbox"
-                                    id="consensus-column"
-                                    checked={exportColumns.consensus}
-                                    onChange={(e) => setExportColumns(prev => ({ ...prev, consensus: e.target.checked }))}
-                                    className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mt-1 flex-shrink-0"
-                                  />
-                                  <div className="ml-3">
-                                    <label htmlFor="consensus-column" className="block text-sm font-medium text-gray-900 dark:text-gray-100">
-                                      Consensus
-                                    </label>
-                                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                                      Whether all labelers agreed (YES/NO/SINGLE/UNLABELED)
-                                    </p>
-                                  </div>
-                                </div>
-                                <div className="flex items-start mt-2">
-                                  <input
-                                    type="checkbox"
-                                    id="agreement_percentage-column"
-                                    checked={exportColumns.agreement_percentage}
-                                    onChange={(e) => setExportColumns(prev => ({ ...prev, agreement_percentage: e.target.checked }))}
-                                    className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mt-1 flex-shrink-0"
-                                  />
-                                  <div className="ml-3">
-                                    <label htmlFor="agreement_percentage-column" className="block text-sm font-medium text-gray-900 dark:text-gray-100">
-                                      Agreement Percentage
-                                    </label>
-                                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                                      Percentage of labelers that agreed on the majority label
-                                    </p>
-                                  </div>
-                                </div>
-                                <div className="flex items-start mt-2">
-                                  <input
-                                    type="checkbox"
-                                    id="majority_label-column"
-                                    checked={exportColumns.majority_label}
-                                    onChange={(e) => setExportColumns(prev => ({ ...prev, majority_label: e.target.checked }))}
-                                    className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mt-1 flex-shrink-0"
-                                  />
-                                  <div className="ml-3">
-                                    <label htmlFor="majority_label-column" className="block text-sm font-medium text-gray-900 dark:text-gray-100">
-                                      Majority Label
-                                    </label>
-                                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                                      The most frequently assigned label
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
+                          <span className="text-sm text-gray-500 dark:text-gray-400">2, 1, 0</span>
                         </div>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-2 ml-6">
+                          Export labels as numbers (2 = positive, 1 = neutral, 0 = negative)
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -1206,7 +882,7 @@ export default function DatasetDetailsClient({ id }: DatasetDetailsClientProps) 
                     Cancel
                   </Button>
                   <Button
-                    onClick={handleExport}
+                    onClick={exportDataset}
                     isLoading={exportLoading}
                     disabled={exportLoading}
                     className="bg-blue-600 hover:bg-blue-700 focus:ring-blue-500"
