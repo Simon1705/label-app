@@ -64,9 +64,6 @@ export default function LabelingClient({ id }: LabelingClientProps) {
   const [isAdmin, setIsAdmin] = useState(false);
   // Add state for tracking the last labeled page
   const [lastLabeledPage, setLastLabeledPage] = useState<number | null>(null);
-  
-  // Create a unique key for localStorage based on dataset and user
-  const localStorageKey = `last_labeled_page_${id}_${user?.id}`;
 
   // Update the label options based on dataset type
   const getAvailableLabels = (): LabelOption[] => {
@@ -602,13 +599,8 @@ export default function LabelingClient({ id }: LabelingClientProps) {
         progressRecord = data;
       }
       
-      // Set the last labeled page from localStorage instead of database
-      const storedLastLabeledPage = localStorage.getItem(localStorageKey);
-      if (storedLastLabeledPage) {
-        setLastLabeledPage(parseInt(storedLastLabeledPage, 10));
-      } else {
-        setLastLabeledPage(null);
-      }
+      // Set the last labeled page from the progress record
+      setLastLabeledPage(progressRecord.last_labeled_page ?? null);
       
       // Check if dataset has score column by checking if any entries have score data
       const { data: sampleEntries, error: sampleError } = await supabase
@@ -656,7 +648,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
     } finally {
       setLoading(false);
     }
-  }, [id, user?.id, entriesPerPage, isAdmin, router, loadPageEntries, scoreFilters, localStorageKey]);
+  }, [id, user?.id, entriesPerPage, isAdmin, router, loadPageEntries, scoreFilters]);
 
   useEffect(() => {
     if (user && id) {
@@ -665,16 +657,6 @@ export default function LabelingClient({ id }: LabelingClientProps) {
     }
   }, [user, id, fetchDatasetAndEntries, checkAdminStatus]);
 
-  // Load last labeled page from localStorage when component mounts
-  useEffect(() => {
-    if (user?.id && id) {
-      const storedLastLabeledPage = localStorage.getItem(localStorageKey);
-      if (storedLastLabeledPage) {
-        setLastLabeledPage(parseInt(storedLastLabeledPage, 10));
-      }
-    }
-  }, [user?.id, id, localStorageKey]);
-  
   // Effect to generate user-specific order when user becomes available
   useEffect(() => {
     if (user?.id && Object.keys(entryOriginalOrder).length > 0 && Object.keys(entryUserOrder).length === 0) {
@@ -783,8 +765,6 @@ export default function LabelingClient({ id }: LabelingClientProps) {
     await updateLastPage(currentPage);
     setLoading(false);
   };
-  
-
   
   // Modify handleNext to save the last page
   const handleNext = async () => {
@@ -991,8 +971,9 @@ export default function LabelingClient({ id }: LabelingClientProps) {
         const currentPage = Math.floor(currentIndex / entriesPerPage);
         
         const progressUpdate: any = {
-          last_updated: new Date().toISOString()
-          // Remove the last_labeled_page update since we're using localStorage
+          last_updated: new Date().toISOString(),
+          // Update the last labeled page
+          last_labeled_page: currentPage
         };
 
         if (newCompletedCount > 0) {
@@ -1027,8 +1008,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
           completed_date: progressUpdate.completed_date || prev.completed_date
         }));
         
-        // Update the last labeled page in localStorage
-        localStorage.setItem(localStorageKey, currentPage.toString());
+        // Update the last labeled page state
         setLastLabeledPage(currentPage);
       }
       
@@ -1570,21 +1550,18 @@ export default function LabelingClient({ id }: LabelingClientProps) {
   // Update the auto-labeling buttons to be aware of the dataset type
   const renderAutoLabelButtons = () => {
     const availableLabels = getAvailableLabels();
-    const showButtons = true; 
-
-    if (!showButtons) return null; 
-
+    
     return (
       <div className="flex flex-col space-y-3">
         <h3 className="font-bold text-gray-900 dark:text-white mb-2 text-center">Auto-Label</h3>
-
+        
         <Button
           onClick={autoLabelPageByScore}
           className="w-full bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center py-3 rounded-lg"
         >
           <FiTag className="mr-2" /> Auto-Label by Score
         </Button>
-
+        
         <Button
           onClick={autoLabelPageByText}
           className="w-full bg-purple-600 hover:bg-purple-700 text-white flex items-center justify-center py-3 rounded-lg"
@@ -1594,7 +1571,6 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       </div>
     );
   };
-
   
   // Use pageEntries instead of entries.slice
   const currentPageEntries = pageEntries.filter(entry => entry && entry.id);
@@ -2081,7 +2057,6 @@ export default function LabelingClient({ id }: LabelingClientProps) {
                         isCurrent ? "bg-blue-600 text-white" : "text-gray-700 dark:text-gray-300"
                       )}
                       disabled={pageNum === -1} // Disabled if it's a separator (...)
-
                     >
                       {pageNum === -1 ? "..." : pageNum}
                     </Button>
@@ -2165,19 +2140,13 @@ export default function LabelingClient({ id }: LabelingClientProps) {
         </div>
       </motion.div>
       
-      {/* Auto-labeling buttons */}
-      {(() => {
-        // Use the same condition as in renderAutoLabelButtons function
-        const showButtons = false;
-        return showButtons && (
-          <div 
-            ref={stickyButtonsRef}
-            className="fixed right-6 top-1/2 transform -translate-y-1/2 bg-white dark:bg-gray-800 rounded-lg shadow-xl p-4 border border-gray-200 dark:border-gray-700 z-40"
-          >
-            {renderAutoLabelButtons()}
-          </div>
-        );
-      })()}
+      {/* Update the auto-labeling buttons to be aware of the dataset type */}
+      <div 
+        ref={stickyButtonsRef}
+        className="fixed right-6 top-1/2 transform -translate-y-1/2 bg-white dark:bg-gray-800 rounded-lg shadow-xl p-4 border border-gray-200 dark:border-gray-700 z-40"
+      >
+        {renderAutoLabelButtons()}
+      </div>
 
       <div className="pb-24"></div>
     </div>
