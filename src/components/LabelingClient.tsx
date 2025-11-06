@@ -56,13 +56,26 @@ export default function LabelingClient({ id }: LabelingClientProps) {
   const [debugMode, setDebugMode] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [entryOriginalOrder, setEntryOriginalOrder] = useState<Record<string, number>>({});
-  const [entryUserOrder, setEntryUserOrder] = useState<Record<string, number>>({}); // New state for user-specific order
+  const [entryUserOrder, setEntryUserOrder] = useState<Record<string, number>>({});
+  const [hasScoreColumn, setHasScoreColumn] = useState(true);
   const [scoreFilters, setScoreFilters] = useState<('all' | '1' | '2' | '3' | '4' | '5')[]>(['all']);
   const [pendingScoreFilters, setPendingScoreFilters] = useState<('all' | '1' | '2' | '3' | '4' | '5')[]>(['all']);
-  const [hasScoreColumn, setHasScoreColumn] = useState<boolean>(true); // Default to true, will be updated when dataset is loaded
-  const [isAdmin, setIsAdmin] = useState(false); // Add isAdmin state
-  const [directPageInput, setDirectPageInput] = useState(''); // For direct page navigation input
+  const [directPageInput, setDirectPageInput] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
+  // Add state for tracking the last labeled page
+  const [lastLabeledPage, setLastLabeledPage] = useState<number | null>(null);
   
+  // Create a unique key for localStorage based on dataset and user
+  const localStorageKey = `last_labeled_page_${id}_${user?.id}`;
+
+  // Update the label options based on dataset type
+  const getAvailableLabels = (): LabelOption[] => {
+    if (dataset?.labeling_type === 'binary') {
+      return ['positive', 'negative'];
+    }
+    return ['positive', 'neutral', 'negative'];
+  };
+
   // Check if user is admin
   const checkAdminStatus = useCallback(async () => {
     try {
@@ -589,6 +602,14 @@ export default function LabelingClient({ id }: LabelingClientProps) {
         progressRecord = data;
       }
       
+      // Set the last labeled page from localStorage instead of database
+      const storedLastLabeledPage = localStorage.getItem(localStorageKey);
+      if (storedLastLabeledPage) {
+        setLastLabeledPage(parseInt(storedLastLabeledPage, 10));
+      } else {
+        setLastLabeledPage(null);
+      }
+      
       // Check if dataset has score column by checking if any entries have score data
       const { data: sampleEntries, error: sampleError } = await supabase
         .from('dataset_entries')
@@ -635,7 +656,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
     } finally {
       setLoading(false);
     }
-  }, [id, user?.id, entriesPerPage, isAdmin, router, loadPageEntries, scoreFilters]);
+  }, [id, user?.id, entriesPerPage, isAdmin, router, loadPageEntries, scoreFilters, localStorageKey]);
 
   useEffect(() => {
     if (user && id) {
@@ -644,6 +665,16 @@ export default function LabelingClient({ id }: LabelingClientProps) {
     }
   }, [user, id, fetchDatasetAndEntries, checkAdminStatus]);
 
+  // Load last labeled page from localStorage when component mounts
+  useEffect(() => {
+    if (user?.id && id) {
+      const storedLastLabeledPage = localStorage.getItem(localStorageKey);
+      if (storedLastLabeledPage) {
+        setLastLabeledPage(parseInt(storedLastLabeledPage, 10));
+      }
+    }
+  }, [user?.id, id, localStorageKey]);
+  
   // Effect to generate user-specific order when user becomes available
   useEffect(() => {
     if (user?.id && Object.keys(entryOriginalOrder).length > 0 && Object.keys(entryUserOrder).length === 0) {
@@ -843,9 +874,20 @@ export default function LabelingClient({ id }: LabelingClientProps) {
     }
   };
   
-  // Modify handleSubmitLabels to use the new approach
+  // Modify handleSubmitLabels to use the new approach and validate labels
   const handleSubmitLabels = async () => {
     if (Object.keys(selectedLabels).length === 0 || !user) return;
+    
+    // Validate that all selected labels are appropriate for the dataset type
+    const availableLabels = getAvailableLabels();
+    const invalidLabels = Object.entries(selectedLabels).filter(([entryId, label]) => 
+      !availableLabels.includes(label)
+    );
+    
+    if (invalidLabels.length > 0) {
+      toast.error(`Some selected labels are not valid for this dataset type`);
+      return;
+    }
     
     try {
       setSubmitting(true);
@@ -945,8 +987,12 @@ export default function LabelingClient({ id }: LabelingClientProps) {
 
       // Update progress if there are any new or updated labels
       if (newCompletedCount > 0 || updateLabels.length > 0) {
+        // Calculate the current page number
+        const currentPage = Math.floor(currentIndex / entriesPerPage);
+        
         const progressUpdate: any = {
-          last_updated: new Date().toISOString(),
+          last_updated: new Date().toISOString()
+          // Remove the last_labeled_page update since we're using localStorage
         };
 
         if (newCompletedCount > 0) {
@@ -980,6 +1026,10 @@ export default function LabelingClient({ id }: LabelingClientProps) {
           start_date: progressUpdate.start_date || prev.start_date,
           completed_date: progressUpdate.completed_date || prev.completed_date
         }));
+        
+        // Update the last labeled page in localStorage
+        localStorage.setItem(localStorageKey, currentPage.toString());
+        setLastLabeledPage(currentPage);
       }
       
       
@@ -1142,8 +1192,98 @@ export default function LabelingClient({ id }: LabelingClientProps) {
     }
   };
   
-  {/* // Auto-label all entries on current page with specified label
+  // Update the labeling buttons to conditionally show the neutral option
+  const renderLabelingButtons = (entryId: string) => {
+    const availableLabels = getAvailableLabels();
+    
+    // For binary datasets, use 2 columns; for multi-class, use 3 columns
+    const gridColumns = availableLabels.includes('neutral') ? 'grid-cols-3' : 'grid-cols-2';
+    
+    return (
+      <div className={`grid ${gridColumns} gap-3`}>
+        <motion.button
+          type="button"
+          className={getLabelButtonClass('positive', entryId) + " p-4 py-5 flex flex-col items-center justify-center rounded-lg transition-all duration-200"}
+          onClick={() => handleLabelSelect(entryId, 'positive')}
+          disabled={submitting}
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+        >
+          <div className="w-12 h-12 rounded-full flex items-center justify-center bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 mb-2">
+            {getLabelIcon('positive')}
+          </div>
+          <span className="font-medium text-base">Positive</span>
+          {selectedLabels[entryId] === 'positive' && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.5 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="absolute top-2 right-2 bg-green-500 text-white rounded-full text-xs font-bold w-6 h-6 flex items-center justify-center"
+            >
+              ✓
+            </motion.div>
+          )}
+        </motion.button>
+        
+        {availableLabels.includes('neutral') && (
+          <motion.button
+            type="button"
+            className={getLabelButtonClass('neutral', entryId) + " p-4 py-5 flex flex-col items-center justify-center rounded-lg transition-all duration-200"}
+            onClick={() => handleLabelSelect(entryId, 'neutral')}
+            disabled={submitting}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+          >
+            <div className="w-12 h-12 rounded-full flex items-center justify-center bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400 mb-2">
+              {getLabelIcon('neutral')}
+            </div>
+            <span className="font-medium text-base">Neutral</span>
+            {selectedLabels[entryId] === 'neutral' && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.5 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="absolute top-2 right-2 bg-yellow-500 text-white rounded-full text-xs font-bold w-6 h-6 flex items-center justify-center"
+              >
+                ✓
+              </motion.div>
+            )}
+          </motion.button>
+        )}
+        
+        <motion.button
+          type="button"
+          className={getLabelButtonClass('negative', entryId) + " p-4 py-5 flex flex-col items-center justify-center rounded-lg transition-all duration-200"}
+          onClick={() => handleLabelSelect(entryId, 'negative')}
+          disabled={submitting}
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+        >
+          <div className="w-12 h-12 rounded-full flex items-center justify-center bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 mb-2">
+            {getLabelIcon('negative')}
+          </div>
+          <span className="font-medium text-base">Negative</span>
+          {selectedLabels[entryId] === 'negative' && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.5 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="absolute top-2 right-2 bg-red-500 text-white rounded-full text-xs font-bold w-6 h-6 flex items-center justify-center"
+            >
+              ✓
+            </motion.div>
+          )}
+        </motion.button>
+      </div>
+    );
+  };
+
+  // Auto-label all entries on current page with specified label
   const autoLabelPage = (label: LabelOption) => {
+    // Check if the label is available for this dataset type
+    const availableLabels = getAvailableLabels();
+    if (!availableLabels.includes(label)) {
+      toast.error(`Label "${label}" is not available for this dataset type`);
+      return;
+    }
+    
     const newLabels: Record<string, LabelOption> = {};
     let count = 0;
     
@@ -1171,12 +1311,13 @@ export default function LabelingClient({ id }: LabelingClientProps) {
     } else {
       toast.success('No entries found on this page');
     }
-  }; */}
+  };
   
-  {/* // Auto-label all entries on current page based on their scores
+  // Auto-label all entries on current page based on their scores
   const autoLabelPageByScore = () => {
     const newLabels: Record<string, LabelOption> = {};
     let count = 0;
+    const availableLabels = getAvailableLabels();
     
     pageEntries.forEach(entry => {
       // Only auto-label entries that don't already have a label from the user
@@ -1191,9 +1332,15 @@ export default function LabelingClient({ id }: LabelingClientProps) {
               count++;
             }
           } else if (entry.score === 3) {
-            // Score 3: Neutral
-            newLabels[entry.id] = 'neutral';
-            count++;
+            // Score 3: Neutral or Positive for binary
+            if (availableLabels.includes('neutral')) {
+              newLabels[entry.id] = 'neutral';
+              count++;
+            } else {
+              // For binary, we'll use positive for neutral scores
+              newLabels[entry.id] = 'positive';
+              count++;
+            }
           } else if (entry.score >= 4 && entry.score <= 5) {
             // Scores 4-5: Positive
             newLabels[entry.id] = 'positive';
@@ -1221,9 +1368,9 @@ export default function LabelingClient({ id }: LabelingClientProps) {
     } else {
       toast.success('No entries needed auto-labeling');
     }
-  }; */}
+  };
   
-  {/* // Auto-label all entries on current page based on text content analysis
+  // Auto-label all entries on current page based on text content analysis
   const autoLabelPageByText = async () => {
     const newLabels: Record<string, LabelOption> = {};
     let count = 0;
@@ -1269,8 +1416,8 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       console.error('Error in text-based auto-labeling:', error);
       toast.error('Failed to auto-label entries based on text analysis');
     }
-  }; */}
-  {/* useEffect(() => {
+  };
+  useEffect(() => {
     // Buttons are always visible, no scroll handling needed
     if (stickyButtonsRef.current) {
       stickyButtonsRef.current.style.display = 'block';
@@ -1280,7 +1427,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       stickyButtonsRef.current.style.transform = 'translateY(-50%)';
       stickyButtonsRef.current.style.zIndex = '40';
     }
-  }, []); */}
+  }, []);
   
   // Cleanup localStorage when unmounting
   useEffect(() => {
@@ -1419,6 +1566,35 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       </motion.div>
     );
   }
+  
+  // Update the auto-labeling buttons to be aware of the dataset type
+  const renderAutoLabelButtons = () => {
+    const availableLabels = getAvailableLabels();
+    const showButtons = true; 
+
+    if (!showButtons) return null; 
+
+    return (
+      <div className="flex flex-col space-y-3">
+        <h3 className="font-bold text-gray-900 dark:text-white mb-2 text-center">Auto-Label</h3>
+
+        <Button
+          onClick={autoLabelPageByScore}
+          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center py-3 rounded-lg"
+        >
+          <FiTag className="mr-2" /> Auto-Label by Score
+        </Button>
+
+        <Button
+          onClick={autoLabelPageByText}
+          className="w-full bg-purple-600 hover:bg-purple-700 text-white flex items-center justify-center py-3 rounded-lg"
+        >
+          <FiTag className="mr-2" /> Auto-Label by Text
+        </Button>
+      </div>
+    );
+  };
+
   
   // Use pageEntries instead of entries.slice
   const currentPageEntries = pageEntries.filter(entry => entry && entry.id);
@@ -1570,20 +1746,20 @@ export default function LabelingClient({ id }: LabelingClientProps) {
                 <div className="w-2 h-2 rounded-full bg-green-400 mr-2"></div>
                 <p className="text-white/90">
                   {progress.completed} of {progress.total} entries labeled • {progressPercent}% complete
-          </p>
+                </p>
         </div>
             </div>
             <div className="flex items-center space-x-3">
               <Button 
                 variant="outline" 
-                className="bg-white/10 text-white border-white/20 hover:bg-white/20"
+                className="bg-white/10 text-white border-white/20 hover:bg-white/10"
                 onClick={() => router.push('/labeling')}
               >
                 Back to Dashboard
               </Button>
               <div className="relative inline-block text-left">
                 <div>
-                  <button type="button" onClick={() => setIsDropdownOpen(!isDropdownOpen)} className="inline-flex justify-center w-full rounded-md border border-white/20 shadow-sm px-4 py-2 bg-white/10 text-sm font-medium text-white hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-white" id="options-menu" aria-haspopup="true" aria-expanded="true">
+                  <button type="button" onClick={() => setIsDropdownOpen(!isDropdownOpen)} className="inline-flex justify-center w-full rounded-md border border-white/20 shadow-sm px-4 py-2 bg-white/10 text-sm font-medium text-white hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-white" id="options-menu" aria-haspopup="true" aria-expanded="true">
                     {entriesPerPage}
                     <FiChevronDown className="-mr-1 ml-2 h-5 w-5" />
                   </button>
@@ -1644,6 +1820,19 @@ export default function LabelingClient({ id }: LabelingClientProps) {
                 <div className="font-medium">{completedEntries.size} entries</div>
               </div>
             </div>
+            
+            {/* Display last labeled page information */}
+            {lastLabeledPage !== null && (
+              <div className="flex items-center">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400">
+                  <FiTag className="text-xl" />
+                </div>
+                <div className="ml-2">
+                  <div className="text-sm text-gray-500 dark:text-gray-400">Last Labeled Page</div>
+                  <div className="font-medium">Page {lastLabeledPage + 1}</div>
+                </div>
+              </div>
+            )}
             
             {/* Score Filter */}
             <div className="flex items-center">
@@ -1836,77 +2025,10 @@ export default function LabelingClient({ id }: LabelingClientProps) {
                     
                     {/* Labels container - takes 2/5 of space on larger screens */}
                     <div className="md:col-span-2">
-                      <div className="grid grid-cols-3 gap-2">
-                        <motion.button
-          type="button"
-                          className={getLabelButtonClass('positive', entry.id) + " p-2 py-3"}
-                    onClick={() => handleLabelSelect(entry.id, 'positive')}
-          disabled={submitting}
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-        >
-                          <div className="w-8 h-8 rounded-full flex items-center justify-center bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 mx-auto mb-1">
-          {getLabelIcon('positive')}
-                          </div>
-                          <span className="font-medium text-sm">Positive</span>
-                    {selectedLabels[entry.id] === 'positive' && (
-                            <motion.div
-                              initial={{ opacity: 0, scale: 0.5 }}
-                              animate={{ opacity: 1, scale: 1 }}
-                              className="absolute top-1 right-1 bg-green-500 text-white rounded-full text-xs font-bold w-4 h-4 flex items-center justify-center"
-                            >
-                              ✓
-                            </motion.div>
-                          )}
-                        </motion.button>
-                        
-                        <motion.button
-          type="button"
-                          className={getLabelButtonClass('neutral', entry.id) + " p-2 py-3"}
-                    onClick={() => handleLabelSelect(entry.id, 'neutral')}
-          disabled={submitting}
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-        >
-                          <div className="w-8 h-8 rounded-full flex items-center justify-center bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400 mx-auto mb-1">
-          {getLabelIcon('neutral')}
-                          </div>
-                          <span className="font-medium text-sm">Neutral</span>
-                    {selectedLabels[entry.id] === 'neutral' && (
-                            <motion.div
-                              initial={{ opacity: 0, scale: 0.5 }}
-                              animate={{ opacity: 1, scale: 1 }}
-                              className="absolute top-1 right-1 bg-yellow-500 text-white rounded-full text-xs font-bold w-4 h-4 flex items-center justify-center"
-                            >
-                              ✓
-                            </motion.div>
-                          )}
-                        </motion.button>
-                        
-                        <motion.button
-          type="button"
-                          className={getLabelButtonClass('negative', entry.id) + " p-2 py-3"}
-                    onClick={() => handleLabelSelect(entry.id, 'negative')}
-          disabled={submitting}
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-        >
-                          <div className="w-8 h-8 rounded-full flex items-center justify-center bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 mx-auto mb-1">
-          {getLabelIcon('negative')}
-                          </div>
-                          <span className="font-medium text-sm">Negative</span>
-                    {selectedLabels[entry.id] === 'negative' && (
-                            <motion.div
-                              initial={{ opacity: 0, scale: 0.5 }}
-                              animate={{ opacity: 1, scale: 1 }}
-                              className="absolute top-1 right-1 bg-red-500 text-white rounded-full text-xs font-bold w-4 h-4 flex items-center justify-center"
-                            >
-                              ✓
-                            </motion.div>
-                          )}
-                        </motion.button>
-                </div>
-              </div>
+                      <div className="h-full">
+                        {renderLabelingButtons(entry.id)}
+                      </div>
+                    </div>
                   </div>
                 </div>
           </Card>
@@ -1959,6 +2081,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
                         isCurrent ? "bg-blue-600 text-white" : "text-gray-700 dark:text-gray-300"
                       )}
                       disabled={pageNum === -1} // Disabled if it's a separator (...)
+
                     >
                       {pageNum === -1 ? "..." : pageNum}
                     </Button>
@@ -1989,7 +2112,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       
       {/* Direct page navigation input */}
       <div className="flex items-center ml-4">
-        <span className="text-gray-700 dark:text-gray-300 mr-2">Go to:</span>
+        <span className="text-gray-700 dark:text-gray-300 mr-2">Go to Page:</span>
         <input
           type="number"
           min="1"
@@ -2042,28 +2165,22 @@ export default function LabelingClient({ id }: LabelingClientProps) {
         </div>
       </motion.div>
       
-      {/* Sticky Auto-Label by Score Buttons - Hidden as per user request */}
-      {/* <div 
-        ref={stickyButtonsRef}
-        className="fixed right-6 top-1/2 transform -translate-y-1/2 bg-white dark:bg-gray-800 rounded-lg shadow-xl p-4 border border-gray-200 dark:border-gray-700 z-40 flex flex-col space-y-3"
-      >
-        <h3 className="font-bold text-gray-900 dark:text-white mb-2 text-center">Auto-Label</h3>
-        <Button
-          onClick={autoLabelPageByScore}
-          className="bg-blue-500 hover:bg-blue-600 text-white flex items-center justify-center"
-        >
-          <FiTag className="mr-2" /> Auto-Label by Score
-        </Button>
-
-        <Button
-          onClick={autoLabelPageByText}
-          className="bg-purple-500 hover:bg-purple-600 text-white flex items-center justify-center"
-        >
-          <FiTag className="mr-2" /> Auto-Label by Text
-        </Button>
-      </div> */}
+      {/* Auto-labeling buttons */}
+      {(() => {
+        // Use the same condition as in renderAutoLabelButtons function
+        const showButtons = false;
+        return showButtons && (
+          <div 
+            ref={stickyButtonsRef}
+            className="fixed right-6 top-1/2 transform -translate-y-1/2 bg-white dark:bg-gray-800 rounded-lg shadow-xl p-4 border border-gray-200 dark:border-gray-700 z-40"
+          >
+            {renderAutoLabelButtons()}
+          </div>
+        );
+      })()}
 
       <div className="pb-24"></div>
     </div>
   );
 }
+
