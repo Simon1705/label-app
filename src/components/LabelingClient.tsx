@@ -11,7 +11,8 @@ import { toast } from 'react-hot-toast';
 import { calculateProgress, cn } from '@/lib/utils';
 import { FiArrowRight, FiArrowLeft, FiCheck, FiX, FiMinus, FiStar, FiLoader, FiAlertCircle, FiHome, FiArrowUp, FiBarChart, FiDatabase, FiChevronsLeft, FiChevronsRight, FiChevronDown, FiFilter, FiTag } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
-import { analyzeSentiment } from '@/lib/sentimentAnalysis';
+import { analyzeSentiment, analyzeSentimentBinary } from '@/lib/sentimentAnalysis';
+
 
 // Local Skeleton component
 function Skeleton({
@@ -57,13 +58,20 @@ export default function LabelingClient({ id }: LabelingClientProps) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [entryOriginalOrder, setEntryOriginalOrder] = useState<Record<string, number>>({});
   const [entryUserOrder, setEntryUserOrder] = useState<Record<string, number>>({});
-  const [hasScoreColumn, setHasScoreColumn] = useState(true);
+  const [hasScoreColumn, setHasScoreColumn] = useState(false);
   const [scoreFilters, setScoreFilters] = useState<('all' | '1' | '2' | '3' | '4' | '5')[]>(['all']);
   const [pendingScoreFilters, setPendingScoreFilters] = useState<('all' | '1' | '2' | '3' | '4' | '5')[]>(['all']);
   const [directPageInput, setDirectPageInput] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
   // Add state for tracking the last labeled page
   const [lastLabeledPage, setLastLabeledPage] = useState<number | null>(null);
+  const lastInitKeyRef = useRef<string | null>(null);
+  const debugLog = (...args: any[]) => {
+    try {
+      // Keep logs concise but identifiable
+      console.log('[LabelingClient]', ...args);
+    } catch {}
+  };
   
   // Create a unique key for localStorage based on dataset and user
   const localStorageKey = `last_labeled_page_${id}_${user?.id}`;
@@ -239,12 +247,8 @@ export default function LabelingClient({ id }: LabelingClientProps) {
   const loadPageEntries = useCallback(async (pageIndex: number, pageSize: number, filtersToUse?: ('all' | '1' | '2' | '3' | '4' | '5')[]) => {
     const currentFilters = filtersToUse || scoreFilters;
     try {
-      // Clear existing data for this page
-      setSubmittedLabels({});
-      setPreviousLabels({});
-      setCompletedEntries(new Set());
-      setSelectedLabels({});
-      setPageEntries([]);
+      debugLog('loadPageEntries:start', { pageIndex, pageSize, hasScoreColumn, currentFilters });
+      // Do not clear pageEntries immediately to avoid UI flicker while loading
       
       // Calculate range for this page
       const start = pageIndex * pageSize;
@@ -319,6 +323,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       }
       
       const { count: totalCount, error: countError } = await countQuery;
+      debugLog('loadPageEntries:count', { totalCount, countError: !!countError });
       
       if (countError) {
         console.error("Error counting entries:", countError);
@@ -349,6 +354,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
         firstPageQuery = firstPageQuery.order('id').range(0, pageSize - 1);
         
         const { data: firstPageData, error: firstPageError } = await firstPageQuery;
+        debugLog('loadPageEntries:recoverFirstPage', { length: firstPageData?.length || 0, firstPageError: !!firstPageError });
         
         if (firstPageError) {
           console.error("Error fetching first page:", firstPageError);
@@ -385,6 +391,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       entriesQuery = entriesQuery.order('id').range(start, validEnd);
       
       const { data: entriesData, error: entriesError } = await entriesQuery;
+      debugLog('loadPageEntries:entries', { length: entriesData?.length || 0, entriesError: !!entriesError, range: { start, end: validEnd } });
       
       if (entriesError) {
         console.error("❌ Error fetching entries:", entriesError);
@@ -411,6 +418,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
         firstPageQuery = firstPageQuery.order('id').range(0, pageSize - 1);
         
         const { data: firstPageData, error: firstPageError } = await firstPageQuery;
+        debugLog('loadPageEntries:firstPageFallback', { length: firstPageData?.length || 0, firstPageError: !!firstPageError });
         
         if (firstPageError) {
           console.error("Error fetching first page:", firstPageError);
@@ -469,11 +477,18 @@ export default function LabelingClient({ id }: LabelingClientProps) {
         return allEntries;
       });
       
+      // Clear per-page label states just before applying new page data
+      setSubmittedLabels({});
+      setPreviousLabels({});
+      setCompletedEntries(new Set());
+      setSelectedLabels({});
+      
       // Set current page entries
       setPageEntries(sortedEntries);
       
       // Process labels for these entries
       await processEntryLabels(entryIds, sortedEntries);
+      debugLog('loadPageEntries:done', { pageIndex, pageSize, appliedCount: sortedEntries.length });
       
     } catch (error) {
       console.error('❌ Error loading page:', error);
@@ -498,6 +513,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
         recoveryQuery = recoveryQuery.order('id').range(0, 9); // First 10 entries
         
         const { data: recoveryData } = await recoveryQuery;
+        debugLog('loadPageEntries:recovery', { length: recoveryData?.length || 0 });
           
         if (recoveryData && recoveryData.length > 0) {
           setPageEntries(recoveryData);
@@ -610,22 +626,31 @@ export default function LabelingClient({ id }: LabelingClientProps) {
         setLastLabeledPage(null);
       }
       
-      // Check if dataset has score column by checking if any entries have score data
+      // Check if dataset has score column; if selecting 'score' errors, disable score filters
       const { data: sampleEntries, error: sampleError } = await supabase
         .from('dataset_entries')
         .select('score')
         .eq('dataset_id', id)
-        .limit(5); // Check first 5 entries
-      
-      if (!sampleError && sampleEntries) {
-        // If any entry has a non-null score, dataset has score column
+        .limit(5);
+
+      if (sampleError) {
+        setHasScoreColumn(false);
+        if (!(scoreFilters.length === 1 && scoreFilters[0] === 'all')) {
+          setScoreFilters(['all']);
+        }
+        if (!(pendingScoreFilters.length === 1 && pendingScoreFilters[0] === 'all')) {
+          setPendingScoreFilters(['all']);
+        }
+      } else if (sampleEntries) {
         const hasScore = sampleEntries.some(entry => entry.score !== null);
         setHasScoreColumn(hasScore);
-        
-        // If no score column, disable filters by setting them to 'all'
         if (!hasScore) {
-          setScoreFilters(['all']);
-          setPendingScoreFilters(['all']);
+          if (!(scoreFilters.length === 1 && scoreFilters[0] === 'all')) {
+            setScoreFilters(['all']);
+          }
+          if (!(pendingScoreFilters.length === 1 && pendingScoreFilters[0] === 'all')) {
+            setPendingScoreFilters(['all']);
+          }
         }
       }
       
@@ -659,11 +684,13 @@ export default function LabelingClient({ id }: LabelingClientProps) {
   }, [id, user?.id, entriesPerPage, isAdmin, router, loadPageEntries, scoreFilters, localStorageKey]);
 
   useEffect(() => {
-    if (user && id) {
-      checkAdminStatus(); // Check admin status first
-      fetchDatasetAndEntries();
-    }
-  }, [user, id, fetchDatasetAndEntries, checkAdminStatus]);
+    if (!user?.id || !id) return;
+    const initKey = `${id}:${user.id}`;
+    if (lastInitKeyRef.current === initKey) return;
+    lastInitKeyRef.current = initKey;
+    checkAdminStatus();
+    fetchDatasetAndEntries();
+  }, [user?.id, id]);
 
   // Load last labeled page from localStorage when component mounts
   useEffect(() => {
@@ -706,7 +733,9 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       
       // Reload current page with new order
       const currentPage = Math.floor(currentIndex / entriesPerPage);
+      setLoading(true);
       await loadPageEntries(currentPage, entriesPerPage, scoreFilters);
+      setLoading(false);
       
       toast.success('Entry order refreshed successfully');
     } catch (error) {
@@ -829,6 +858,9 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       const prevIndex = currentIndex - entriesPerPage;
       const prevPage = Math.floor(prevIndex / entriesPerPage);
       
+      // Show loading to prevent no-data flicker
+      setLoading(true);
+      
       // Load the previous page data
       loadPageEntries(prevPage, entriesPerPage, scoreFilters).then(() => {
         // Update current index
@@ -836,7 +868,8 @@ export default function LabelingClient({ id }: LabelingClientProps) {
         
         // Save the last page to the database
         updateLastPage(prevPage);
-        
+      }).finally(() => {
+        setLoading(false);
       });
     }
   };
@@ -1417,6 +1450,54 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       toast.error('Failed to auto-label entries based on text analysis');
     }
   };
+
+  // Auto-label all entries on current page based on text content analysis (binary)
+  const autoLabelPageByTextBinary = async () => {
+    const newLabels: Record<string, LabelOption> = {};
+    let count = 0;
+    
+    // Show loading state
+    toast.loading('Analyzing text sentiment (binary)...');
+    
+    try {
+      // Process entries sequentially to avoid overwhelming the API
+      for (const entry of pageEntries) {
+        // Only auto-label entries that don't already have a label from the user
+        if (!selectedLabels[entry.id]) {
+          // Apply label based on text content analysis (binary)
+          const sentiment = await analyzeSentimentBinary(entry.text);
+          newLabels[entry.id] = sentiment;
+          count++;
+        }
+      }
+      
+      setSelectedLabels(prev => ({
+        ...prev,
+        ...newLabels
+      }));
+      
+      // Dismiss loading toast and show success message
+      toast.dismiss();
+      
+      // Show appropriate toast message
+      if (count > 0) {
+        toast.success(
+          <div className="flex items-center">
+            <span>Auto-labeled {count} entries based on binary text analysis</span>
+            <span className="ml-2 px-2 py-1 rounded text-xs font-medium bg-white/20">
+              Submit to save
+            </span>
+          </div>
+        );
+      } else {
+        toast.success('No entries needed auto-labeling');
+      }
+    } catch (error) {
+      toast.dismiss();
+      console.error('Error in binary text-based auto-labeling:', error);
+      toast.error('Failed to auto-label entries based on binary text analysis');
+    }
+  };
   useEffect(() => {
     // Buttons are always visible, no scroll handling needed
     if (stickyButtonsRef.current) {
@@ -1535,7 +1616,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
     );
   }
   
-  if (!dataset || entries.length === 0) {
+  if (!dataset) {
     return (
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
@@ -1591,6 +1672,15 @@ export default function LabelingClient({ id }: LabelingClientProps) {
         >
           <FiTag className="mr-2" /> Auto-Label by Text
         </Button>
+
+        {dataset?.labeling_type === 'binary' && (
+          <Button
+            onClick={autoLabelPageByTextBinary}
+            className="w-full bg-pink-600 hover:bg-pink-700 text-white flex items-center justify-center py-3 rounded-lg"
+          >
+            <FiTag className="mr-2" /> Auto-Label by Text Binary
+          </Button>
+        )}
       </div>
     );
   };
@@ -1599,7 +1689,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
   // Use pageEntries instead of entries.slice
   const currentPageEntries = pageEntries.filter(entry => entry && entry.id);
 
-  if (currentPageEntries.length === 0) {
+  if (!loading && currentPageEntries.length === 0) {
     return (
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
@@ -2168,7 +2258,7 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       {/* Auto-labeling buttons */}
       {(() => {
         // Use the same condition as in renderAutoLabelButtons function
-        const showButtons = false;
+        const showButtons =false;
         return showButtons && (
           <div 
             ref={stickyButtonsRef}

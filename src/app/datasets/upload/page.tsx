@@ -434,13 +434,21 @@ export default function UploadDataset() {
       </div>
 
       <Card className="w-full max-w-2xl z-10 shadow-2xl backdrop-blur-md bg-white/80 dark:bg-gray-900/80 border border-white/30 dark:border-gray-700/60">
-        <CardHeader>
-          <CardTitle className="text-2xl">Upload a New Dataset</CardTitle>
+        <CardHeader className="text-center pb-6">
+          <div className="mx-auto bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-2xl h-16 w-16 flex items-center justify-center shadow-lg mb-4">
+            <FiUpload className="text-white text-2xl" />
+          </div>
+          <CardTitle className="text-3xl font-bold bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+            Upload Dataset
+          </CardTitle>
+          <p className="text-gray-600 dark:text-gray-300 mt-2">
+            Share your data for collaborative labeling
+          </p>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Dataset Name
               </label>
               <Input
@@ -449,13 +457,13 @@ export default function UploadDataset() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g., Customer Feedback Q1"
-                className="mt-1"
+                className="mt-1 py-3 px-4 rounded-xl border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               />
               {errors.name && <p className="mt-1 text-sm text-red-500">{errors.name}</p>}
             </div>
 
             <div>
-              <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Description (Optional)
               </label>
               <Input
@@ -463,54 +471,78 @@ export default function UploadDataset() {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="A short description of the dataset"
-                className="mt-1"
+                className="mt-1 py-3 px-4 rounded-xl border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
                 Labeling Type
               </label>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <button
                   type="button"
                   onClick={() => setLabelingType('multi_class')}
-                  className={`p-4 rounded-lg border-2 transition-all ${
+                  className={`p-5 rounded-xl border-2 transition-all text-left ${
                     labelingType === 'multi_class'
-                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                      : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                      ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 shadow-md'
+                      : 'border-gray-200 dark:border-gray-700 hover:border-indigo-300 dark:hover:border-indigo-600'
                   }`}
                 >
-                  <div className="font-medium text-gray-900 dark:text-white">Multi-Class</div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                  <div className="font-semibold text-lg text-gray-900 dark:text-white">Multi-Class</div>
+                  <div className="text-sm text-gray-600 dark:text-gray-300 mt-2">
                     Positive, Neutral, Negative
+                  </div>
+                  <div className="mt-3 flex items-center">
+                    <div className="flex space-x-2">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200">
+                        Positive
+                      </span>
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200">
+                        Neutral
+                      </span>
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200">
+                        Negative
+                      </span>
+                    </div>
                   </div>
                 </button>
                 <button
                   type="button"
                   onClick={() => setLabelingType('binary')}
-                  className={`p-4 rounded-lg border-2 transition-all ${
+                  className={`p-5 rounded-xl border-2 transition-all text-left ${
                     labelingType === 'binary'
-                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                      : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                      ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 shadow-md'
+                      : 'border-gray-200 dark:border-gray-700 hover:border-indigo-300 dark:hover:border-indigo-600'
                   }`}
                 >
-                  <div className="font-medium text-gray-900 dark:text-white">Binary</div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                  <div className="font-semibold text-lg text-gray-900 dark:text-white">Binary</div>
+                  <div className="text-sm text-gray-600 dark:text-gray-300 mt-2">
                     Positive, Negative (No Neutral)
+                  </div>
+                  <div className="mt-3 flex items-center">
+                    <div className="flex space-x-2">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200">
+                        Positive
+                      </span>
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200">
+                        Negative
+                      </span>
+                  </div>
                   </div>
                 </button>
               </div>
             </div>
 
             <div>
-              <label htmlFor="file-upload" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              <label htmlFor="file-upload" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Dataset File
               </label>
-              <div className="mt-1 flex items-center space-x-4">
+              <div className="mt-1 flex flex-col sm:flex-row items-start sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
                 <Button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
+                  className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white py-3 px-5 rounded-xl shadow-md hover:shadow-lg transition-all"
                 >
                   <FiUpload className="mr-2" />
                   Choose CSV File
@@ -523,40 +555,55 @@ export default function UploadDataset() {
                   accept=".csv"
                   className="hidden"
                 />
-                {file && <span className="text-sm text-gray-500">{file.name}</span>}
+                {file && (
+                  <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-lg px-3 py-2">
+                    <span className="text-sm text-gray-700 dark:text-gray-300 truncate max-w-xs">{file.name}</span>
+                  </div>
+                )}
               </div>
-              {errors.file && <p className="mt-1 text-sm text-red-500">{errors.file}</p>}
+              {errors.file && <p className="mt-2 text-sm text-red-500">{errors.file}</p>}
             </div>
 
             {csvValidationResult && (
               <div
-                className={`flex items-start rounded-md p-3 ${
+                className={`flex items-start rounded-xl p-4 ${
                   csvValidationResult.isValid
-                    ? 'bg-green-50 text-green-800'
-                    : 'bg-red-50 text-red-800'
+                    ? 'bg-green-50 text-green-800 dark:bg-green-900/20 dark:text-green-200 border border-green-200 dark:border-green-800/50'
+                    : 'bg-red-50 text-red-800 dark:bg-red-900/20 dark:text-red-200 border border-red-200 dark:border-red-800/50'
                 }`}
               >
                 {csvValidationResult.isValid ? (
-                  <FiCheck className="h-5 w-5 flex-shrink-0" />
+                  <FiCheck className="h-5 w-5 flex-shrink-0 mt-0.5" />
                 ) : (
-                  <FiAlertCircle className="h-5 w-5 flex-shrink-0" />
+                  <FiAlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
                 )}
                 <div className="ml-3">
                   <p className="text-sm font-medium">{csvValidationResult.message}</p>
+                  {csvValidationResult.isValid && csvValidationResult.totalRows > 0 && (
+                    <p className="text-xs mt-1">
+                      Ready to process {csvValidationResult.totalRows} entries
+                    </p>
+                  )}
                 </div>
               </div>
             )}
             
-            <div className="flex items-center space-x-2 text-sm text-gray-500 p-3 bg-blue-50 text-blue-800 rounded-md">
-                <FiInfo className="h-5 w-5 flex-shrink-0" />
-                <span>The CSV file must contain a 'text' column. An optional 'score' column with values from 1 to 5 is also supported.</span>
+            <div className="flex items-start space-x-3 text-sm p-4 bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-200 rounded-xl border border-blue-200 dark:border-blue-800/50">
+                <FiInfo className="h-5 w-5 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-medium">CSV Requirements</p>
+                  <ul className="list-disc list-inside mt-1 space-y-1">
+                    <li>Must contain a 'text' column with content to label</li>
+                    <li>Optional 'score' column with values from 1 to 5</li>
+                  </ul>
+                </div>
             </div>
 
-            <div className="flex justify-end">
+            <div className="flex justify-end pt-4">
               <Button
                 type="submit"
                 disabled={isUploading || (csvValidationResult ? !csvValidationResult.isValid : false)}
-                className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 text-white shadow-lg font-semibold text-base px-6 py-2"
+                className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 text-white shadow-lg font-semibold text-base px-8 py-3 rounded-xl transition-all hover:shadow-xl"
               >
                 {isUploading ? (
                   <>

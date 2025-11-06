@@ -11,7 +11,8 @@ import { toast } from 'react-hot-toast';
 import { calculateProgress, cn } from '@/lib/utils';
 import { FiArrowRight, FiArrowLeft, FiCheck, FiX, FiMinus, FiStar, FiLoader, FiAlertCircle, FiHome, FiArrowUp, FiBarChart, FiDatabase, FiChevronsLeft, FiChevronsRight, FiChevronDown, FiFilter, FiTag } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
-import { analyzeSentiment } from '@/lib/sentimentAnalysis';
+import { analyzeSentiment, analyzeSentimentBinary } from '@/lib/sentimentAnalysis';
+
 
 // Local Skeleton component
 function Skeleton({
@@ -1397,6 +1398,54 @@ export default function LabelingClient({ id }: LabelingClientProps) {
       toast.error('Failed to auto-label entries based on text analysis');
     }
   };
+
+  // Auto-label all entries on current page based on text content analysis (binary)
+  const autoLabelPageByTextBinary = async () => {
+    const newLabels: Record<string, LabelOption> = {};
+    let count = 0;
+    
+    // Show loading state
+    toast.loading('Analyzing text sentiment (binary)...');
+    
+    try {
+      // Process entries sequentially to avoid overwhelming the API
+      for (const entry of pageEntries) {
+        // Only auto-label entries that don't already have a label from the user
+        if (!selectedLabels[entry.id]) {
+          // Apply label based on text content analysis (binary)
+          const sentiment = await analyzeSentimentBinary(entry.text);
+          newLabels[entry.id] = sentiment;
+          count++;
+        }
+      }
+      
+      setSelectedLabels(prev => ({
+        ...prev,
+        ...newLabels
+      }));
+      
+      // Dismiss loading toast and show success message
+      toast.dismiss();
+      
+      // Show appropriate toast message
+      if (count > 0) {
+        toast.success(
+          <div className="flex items-center">
+            <span>Auto-labeled {count} entries based on binary text analysis</span>
+            <span className="ml-2 px-2 py-1 rounded text-xs font-medium bg-white/20">
+              Submit to save
+            </span>
+          </div>
+        );
+      } else {
+        toast.success('No entries needed auto-labeling');
+      }
+    } catch (error) {
+      toast.dismiss();
+      console.error('Error in binary text-based auto-labeling:', error);
+      toast.error('Failed to auto-label entries based on binary text analysis');
+    }
+  };
   useEffect(() => {
     // Buttons are always visible, no scroll handling needed
     if (stickyButtonsRef.current) {
@@ -1568,6 +1617,15 @@ export default function LabelingClient({ id }: LabelingClientProps) {
         >
           <FiTag className="mr-2" /> Auto-Label by Text
         </Button>
+
+        {dataset?.labeling_type === 'binary' && (
+          <Button
+            onClick={autoLabelPageByTextBinary}
+            className="w-full bg-pink-600 hover:bg-pink-700 text-white flex items-center justify-center py-3 rounded-lg"
+          >
+            <FiTag className="mr-2" /> Auto-Label by Text Binary
+          </Button>
+        )}
       </div>
     );
   };

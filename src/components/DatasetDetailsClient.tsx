@@ -694,6 +694,13 @@ export default function DatasetDetailsClient({ id }: DatasetDetailsClientProps) 
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
+            {/* Continue Labeling Button */}
+            <Button 
+              onClick={() => router.push(`/labeling/${id}`)}
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              Go Labeling
+            </Button>
             <Button 
               variant="outline" 
               onClick={() => setShowInviteCode(!showInviteCode)}

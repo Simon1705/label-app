@@ -247,33 +247,49 @@ export default function DatasetsPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.2 }}
-          className="backdrop-blur-sm bg-white/70 dark:bg-gray-800/70 rounded-lg shadow-lg p-4 border border-white/20 dark:border-gray-700/50"
+          className="backdrop-blur-sm bg-white/70 dark:bg-gray-800/70 rounded-2xl shadow-lg p-6 border border-white/20 dark:border-gray-700/50"
         >
-          <div className="flex flex-col sm:flex-row gap-4 justify-between items-center">
-            <div className="relative w-full sm:w-auto">
-              <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                <FiSearch className="text-gray-400" />
+          <div className="flex flex-col md:flex-row gap-6 justify-between items-center">
+            <div className="flex-1 max-w-lg">
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
+                  <FiSearch className="text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  className="block w-full pl-12 pr-4 py-3 border border-gray-300 dark:border-gray-700 rounded-xl bg-white/70 dark:bg-gray-800/70 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 backdrop-blur-sm shadow-sm"
+                  placeholder="Search datasets..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
               </div>
-              <input
-                type="text"
-                className="block w-full sm:w-64 pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white/70 dark:bg-gray-800/70 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 backdrop-blur-sm shadow-sm"
-                placeholder="Search datasets..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
             </div>
-            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-              <Badge className="bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-100 border-white/20 dark:border-gray-700/50 shadow-sm">
+            <div className="flex items-center gap-3">
+              <Badge className="bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-100 border-white/20 dark:border-gray-700/50 shadow-sm py-2 px-3">
+                <FiDatabase className="mr-2" />
                 {datasets.length} Total Datasets
               </Badge>
               <Button 
                 onClick={refreshData}
-                className="relative border-white/20 dark:border-gray-700/50 hover:border-indigo-300 dark:hover:border-indigo-700 bg-white/70 dark:bg-gray-800/70 text-gray-700 dark:text-gray-300 backdrop-blur-sm shadow-sm"
+                className="relative border-white/20 dark:border-gray-700/50 hover:border-indigo-300 dark:hover:border-indigo-700 bg-white/70 dark:bg-gray-800/70 text-gray-700 dark:text-gray-300 backdrop-blur-sm shadow-sm py-3 px-4 rounded-xl"
                 disabled={refreshing}
               >
                 <FiRefreshCw className={`mr-2 ${refreshing ? 'animate-spin' : ''}`} /> Refresh
               </Button>
             </div>
+          </div>
+          
+          <div className="flex flex-wrap gap-3 mt-6">
+            <Link href="/datasets/upload" className="flex-1 min-w-[200px]">
+              <Button className="w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 text-white shadow-lg hover:shadow-xl transition-all py-3 rounded-xl">
+                <FiPlus className="mr-2" /> Upload New Dataset
+              </Button>
+            </Link>
+            <Link href="/datasets/join" className="flex-1 min-w-[200px]">
+              <Button className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-lg hover:shadow-xl transition-all py-3 rounded-xl">
+                <FiTag className="mr-2" /> Join with Code
+              </Button>
+            </Link>
           </div>
         </motion.div>
 
@@ -356,10 +372,10 @@ export default function DatasetsPage() {
                           </div>
                         </div>
                       </CardContent>
-                      <CardFooter className="border-t border-gray-200 dark:border-gray-700/30 pt-4 flex gap-2">
+                      <CardFooter className="border-t border-gray-200 dark:border-gray-700/30 pt-4 flex gap-3">
                         <Link href={`/datasets/${dataset.id}`} className="flex-1">
                           <Button 
-                            className={`w-full text-white shadow-md hover:shadow-lg transition-all cursor-pointer ${dataset.is_active === false ? 'bg-gradient-to-r from-gray-600 via-gray-700 to-gray-800 hover:from-gray-700 hover:via-gray-800 hover:to-gray-900' : 'bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700'}`}
+                            className={`w-full text-white shadow-md hover:shadow-lg transition-all cursor-pointer rounded-xl py-2.5 ${dataset.is_active === false ? 'bg-gradient-to-r from-gray-600 via-gray-700 to-gray-800 hover:from-gray-700 hover:via-gray-800 hover:to-gray-900' : 'bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700'}`}
                             onClick={(e) => {
                               if (dataset.is_active === false) {
                                 e.preventDefault();
@@ -373,7 +389,7 @@ export default function DatasetsPage() {
                         </Link>
                         <Link href={`/labeling/${dataset.id}`} className="flex-1">
                           <Button 
-                            className={`w-full text-white shadow-md hover:shadow-lg transition-all cursor-pointer ${dataset.is_active === false ? 'bg-gradient-to-r from-gray-600 to-gray-800 hover:from-gray-700 hover:to-gray-900' : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700'}`}
+                            className={`w-full text-white shadow-md hover:shadow-lg transition-all cursor-pointer rounded-xl py-2.5 ${dataset.is_active === false ? 'bg-gradient-to-r from-gray-600 to-gray-800 hover:from-gray-700 hover:to-gray-900' : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700'}`}
                             onClick={(e) => {
                               if (dataset.is_active === false) {
                                 e.preventDefault();

@@ -25,6 +25,33 @@ export async function analyzeSentiment(text: string): Promise<LabelOption> {
   }
 }
 
+// Function to analyze sentiment using our Python API with binary classification
+export async function analyzeSentimentBinary(text: string): Promise<LabelOption> {
+  try {
+    // Call our Python API endpoint for binary classification
+    const response = await fetch('http://localhost:5001/analyze', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ text }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`API request failed with status ${response.status}`);
+    }
+
+    const result = await response.json();
+    return result.label as LabelOption;
+  } catch (error) {
+    console.error('Error analyzing sentiment (binary):', error);
+    // Fallback to our previous keyword-based approach if API fails, but convert to binary
+    const fallbackLabel = analyzeSentimentFallback(text);
+    // Convert to binary (positive or negative only)
+    return fallbackLabel === 'positive' ? 'positive' : 'negative';
+  }
+}
+
 // Fallback implementation using keyword matching
 function analyzeSentimentFallback(text: string): LabelOption {
   // Convert to lowercase for case-insensitive matching

@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { toast } from 'react-hot-toast';
 import { Dataset } from '@/types';
-import { FiTag } from 'react-icons/fi';
+import { FiTag, FiInfo } from 'react-icons/fi';
 
 export default function JoinLabeling() {
   const { user } = useAuth();
@@ -168,48 +168,62 @@ export default function JoinLabeling() {
       </div>
 
       <Card className="w-full max-w-md z-10 shadow-2xl backdrop-blur-md bg-white/80 dark:bg-gray-900/80 border border-white/30 dark:border-gray-700/60">
-        <CardHeader className="flex flex-col items-center">
+        <CardHeader className="flex flex-col items-center pb-6">
           <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-lg mb-4">
             <FiTag className="text-white text-3xl" />
           </div>
-          <CardTitle className="text-2xl text-center">Join a Labeling Task</CardTitle>
-          <CardDescription className="text-center">
-            Enter the invite code you received to start labeling a new dataset.
+          <CardTitle className="text-3xl font-bold bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent text-center">
+            Join Labeling Task
+          </CardTitle>
+          <CardDescription className="text-center mt-2 text-gray-600 dark:text-gray-300">
+            Enter the invite code to start collaborating on a dataset
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleJoin}>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-5">
             <div>
-              <label htmlFor="invite-code" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label htmlFor="invite-code" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Invite Code
               </label>
               <div className="relative mt-1">
+                <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
+                  <FiTag 
+                    className="text-gray-400" 
+                    size={20}
+                  />
+                </div>
                 <Input
                   id="invite-code"
                   placeholder="Enter the invite code"
                   value={inviteCode}
                   onChange={(e) => setInviteCode(e.target.value)}
                   disabled={isJoining}
-                  className={`pl-10 ${error ? 'border-red-500 focus:ring-red-500' : ''}`}
+                  className={`pl-12 py-3 rounded-xl border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-indigo-500 focus:border-transparent ${error ? 'border-red-500 focus:ring-red-500' : ''}`}
                   autoFocus
                 />
-                <FiTag 
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" 
-                  size={18}
-                />
               </div>
-              {error && <p className="mt-1 text-sm text-red-500 font-medium">{error}</p>}
+              {error && <p className="mt-2 text-sm text-red-500 font-medium">{error}</p>}
             </div>
-            <p className="text-sm text-gray-500 dark:text-gray-400 !mt-2 text-center">
-              The invite code is a unique key provided by the dataset owner to grant access for labeling.
-            </p>
+            
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/50 rounded-xl p-4">
+              <div className="flex items-start space-x-3">
+                <FiInfo className="h-5 w-5 text-blue-500 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <h3 className="text-sm font-semibold text-blue-800 dark:text-blue-200">How to get an invite code</h3>
+                  <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                    Ask the dataset owner to share the invite code with you. 
+                    They can find it on the dataset details page.
+                  </p>
+                </div>
+              </div>
+            </div>
           </CardContent>
-          <CardFooter>
+          <CardFooter className="pt-0">
             <Button
               type="submit"
               isLoading={isJoining}
               disabled={!inviteCode.trim() || isJoining}
-              className="w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 text-white shadow-lg font-semibold text-base py-2"
+              className="w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 text-white shadow-lg font-semibold text-base py-3 rounded-xl transition-all hover:shadow-xl"
             >
               {isJoining ? 'Joining...' : 'Join Labeling Task'}
             </Button>
